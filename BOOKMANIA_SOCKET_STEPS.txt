@@ -1,0 +1,39 @@
+BOOKMANIA SOCKET.IO LIVE SETUP
+
+1) Put these 3 files in one folder:
+   - BookMania_socketio_live.html
+   - bookmania-server.js
+   - package.json
+
+2) Open Terminal in that folder.
+
+3) Install dependencies:
+   npm install
+
+4) Start the live server:
+   npm start
+
+5) Open this in your browser:
+   http://localhost:3000
+
+6) Test instant live features:
+   - Open http://localhost:3000 in 2 browser tabs.
+   - Login/signup in both.
+   - Post a story in one tab; it appears instantly in the other.
+   - Open comments; comments appear instantly in all tabs.
+   - Login as owner BookMania and open profile menu > Owner Admin Panel.
+   - Broadcast restart screen, send/remove global messages, ban/unban users.
+
+7) Owner account:
+   The app does not show the owner login details on screen.
+   For safer local use, set the owner password from Terminal before starting:
+
+   macOS/Linux:
+   BOOKMANIA_OWNER_PASSWORD=yourSecret npm start
+
+   Windows PowerShell:
+   $env:BOOKMANIA_OWNER_PASSWORD="yourSecret"; npm start
+
+IMPORTANT:
+The browser admin button broadcasts a restart animation to everyone instantly.
+A real backend process restart should be done using your terminal/process manager like nodemon or PM2.
