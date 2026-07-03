@@ -17,7 +17,8 @@ let state = {
   stories: [],
   comments: {},
   bannedUsers: [],
-  globalMessage: ''
+  globalMessage: '',
+  profiles: {}
 };
 const liveUsers = new Map();
 
@@ -25,6 +26,7 @@ function loadState() {
   try {
     if (fs.existsSync(DATA_FILE)) {
       state = { ...state, ...JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')) };
+      state.profiles = state.profiles || {};
     }
   } catch (err) {
     console.warn('Could not load data file:', err.message);
@@ -69,17 +71,31 @@ io.on('connection', socket => {
   socket.on('user:hello', user => {
     const username = safeText(user?.username || `Guest-${socket.id.slice(0, 5)}`, 60);
     const displayName = safeText(user?.displayName || username, 80);
+    const savedProfile = state.profiles[username] || {};
+    const incomingAvatar = safeText(user?.avatarUrl || '', 200000);
+    const avatarUrl = incomingAvatar || safeText(savedProfile.avatarUrl || '', 200000);
     const normalized = {
       username,
       displayName,
-      initials: safeText(user?.initials || displayName.slice(0, 2).toUpperCase(), 4),
-      avatarUrl: safeText(user?.avatarUrl || '', 200000),
+      initials: safeText(user?.initials || savedProfile.initials || displayName.slice(0, 2).toUpperCase(), 4),
+      avatarUrl,
       owner: !!user?.owner || username === OWNER_USERNAME,
       verified: !!user?.verified || username === OWNER_USERNAME,
       socketId: socket.id
     };
+    state.profiles[username] = {
+      username,
+      displayName: normalized.displayName,
+      initials: normalized.initials,
+      avatarUrl: normalized.avatarUrl,
+      owner: normalized.owner,
+      verified: normalized.verified,
+      updatedAt: Date.now()
+    };
+    saveState();
     liveUsers.set(socket.id, normalized);
-    socket.emit('state:init', { ...state, users: publicUsers() });
+    socket.emit('state:init', { ...state, users: publicUsers(), myProfile: state.profiles[username] });
+    socket.emit('profile:sync', state.profiles[username]);
     if (state.bannedUsers.includes(username) && !normalized.owner) socket.emit('admin:banned');
     emitUsers();
   });
@@ -122,6 +138,35 @@ io.on('connection', socket => {
   socket.on('comments:get', data => {
     const storyId = String(data?.storyId || '');
     socket.emit('comment:new', { storyId: data?.storyId, comments: state.comments[storyId] || [] });
+  });
+
+
+  socket.on('profile:update', data => {
+    const user = liveUsers.get(socket.id);
+    if (!user) return;
+    const avatarUrl = safeText(data?.avatarUrl || '', 200000);
+    const profile = {
+      username: user.username,
+      displayName: user.displayName,
+      initials: user.initials,
+      avatarUrl,
+      owner: !!user.owner,
+      verified: !!user.verified,
+      updatedAt: Date.now()
+    };
+    state.profiles[user.username] = profile;
+    user.avatarUrl = avatarUrl;
+    // Update old posts/comments too, so a changed profile picture appears everywhere.
+    state.stories.forEach(st => {
+      if (st.username === user.username || st.user === user.displayName) st.avatarUrl = avatarUrl;
+    });
+    Object.values(state.comments).forEach(list => {
+      (list || []).forEach(c => { if (c.username === user.username) c.avatarUrl = avatarUrl; });
+    });
+    saveState();
+    socket.emit('profile:sync', profile);
+    io.emit('profile:update', profile);
+    emitUsers();
   });
 
   socket.on('comment:new', data => {

@@ -2122,6 +2122,8 @@ function bmConnectSocket(){
     bmSocket.on('admin:restart',()=>showRestartBM());
     bmSocket.on('admin:banned',()=>checkBanBM(true));
     bmSocket.on('admin:unbanned',()=>checkBanBM(false));
+    bmSocket.on('profile:sync',profile=>bmApplyServerProfileBM(profile));
+    bmSocket.on('profile:update',profile=>bmApplyProfileToStoriesBM(profile));
   }).catch(()=>bmSetLive(false,'Socket script missing'));
 }
 function bmMergeServerStories(){
@@ -2140,8 +2142,13 @@ function hideGlobalBM(){const el=document.getElementById('globalMsgBM'); if(el){
 function showRestartBM(){
   const rs=document.getElementById('restartScreenBM'), sub=document.getElementById('restartSubBM');
   if(!rs)return; rs.classList.add('show');
-  let n=3; if(sub) sub.textContent='Reconnecting in '+n+'...';
-  const t=setInterval(()=>{n--; if(sub) sub.textContent=n>0?'Reconnecting in '+n+'...':'Back online'; if(n<=0){clearInterval(t);setTimeout(()=>rs.classList.remove('show'),650);}},900);
+  let n=3;
+  if(sub) sub.textContent='Refreshing all tabs in '+n+'...';
+  const t=setInterval(()=>{
+    n--;
+    if(sub) sub.textContent=n>0?'Refreshing all tabs in '+n+'...':'Refreshing now...';
+    if(n<=0){clearInterval(t);setTimeout(()=>window.location.reload(),550);}
+  },1000);
 }
 function openAdminPanelBM(){if(!isOwnerUser(CU)){showToast('Owner only');return;}document.getElementById('adminPanelBM').classList.add('open'); if(bmSocketReady)bmSocket.emit('admin:get-users',bmCurrentUserPayload()); bmRenderAdminUsers();}
 function closeAdminPanelBM(){document.getElementById('adminPanelBM').classList.remove('open');}
@@ -2245,6 +2252,66 @@ publishStory=function(){
   if(bmSocketReady) bmSocket.emit('story:new',storyObj); else showToast('Saved locally. Start server for instant live posting.');
   storyPages=[''];curPageIdx=0;
   document.getElementById('s-title').value='';document.getElementById('s-content').value='';document.getElementById('wc-display').textContent='0 words';renderPageTabs();renderStories();switchTab('see');showToast(owner?'Published live as BookMania ✓':'Story published live');
+};
+
+
+// === PROFILE PICTURE SERVER SAVE + CLIENT RESIZE PATCH ===
+function bmResizeProfileImageBM(file, cb){
+  if(!file) return;
+  const img=new Image();
+  const reader=new FileReader();
+  reader.onload=e=>{img.onload=()=>{
+    const max=320;
+    const scale=Math.min(1,max/img.width,max/img.height);
+    const canvas=document.createElement('canvas');
+    canvas.width=Math.max(1,Math.round(img.width*scale));
+    canvas.height=Math.max(1,Math.round(img.height*scale));
+    const ctx=canvas.getContext('2d');
+    ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    let data=canvas.toDataURL('image/jpeg',0.78);
+    if(data.length>190000) data=canvas.toDataURL('image/jpeg',0.55);
+    cb(data);
+  }; img.src=e.target.result;};
+  reader.readAsDataURL(file);
+}
+function bmSaveCurrentUserProfileBM(){
+  if(!CU || !CU.un) return;
+  const us=getU();
+  if(us[CU.un]){us[CU.un]=CU;saveU(us);}
+}
+function bmApplyServerProfileBM(profile){
+  if(!profile || !CU || profile.username!==CU.un) return;
+  if(profile.avatarUrl && profile.avatarUrl!==CU.av){
+    CU.av=profile.avatarUrl;
+    bmSaveCurrentUserProfileBM();
+    updateUI();
+  }
+  bmApplyProfileToStoriesBM(profile);
+}
+function bmApplyProfileToStoriesBM(profile){
+  if(!profile || !profile.username) return;
+  let changed=false;
+  [...pubStories,...bmServerStories].forEach(st=>{
+    if(st.username===profile.username || st.user===profile.displayName){st.avatarUrl=profile.avatarUrl||'';changed=true;}
+  });
+  Object.values(bmComments||{}).forEach(list=>(list||[]).forEach(c=>{
+    if(c.username===profile.username){c.avatarUrl=profile.avatarUrl||'';changed=true;}
+  }));
+  if(changed){localStorage.setItem('bm_pub_stories',JSON.stringify(pubStories));renderStories();bmRenderOpenComments();}
+}
+handleAvatar=function(inp){
+  const f=inp.files&&inp.files[0];if(!f)return;
+  bmResizeProfileImageBM(f,data=>{pendAv=data;const p=document.getElementById('av-preview');if(p)p.innerHTML=`<img src="${data}">`;});
+};
+changeProfilePic=function(inp){
+  const f=inp.files&&inp.files[0];if(!f||!CU)return;
+  bmResizeProfileImageBM(f,data=>{
+    const us=getU();
+    if(us[CU.un]) us[CU.un].av=data;
+    CU.av=data;
+    saveU(us);updateUI();closeProfile();showToast('Profile picture saved live');
+    if(bmSocketReady) bmSocket.emit('profile:update',{avatarUrl:data,user:bmCurrentUserPayload()});
+  });
 };
 
 bmConnectSocket();
