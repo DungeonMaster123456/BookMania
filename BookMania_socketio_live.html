@@ -469,6 +469,42 @@ input,textarea,select{font-family:var(--fn);}
 .banned-card h2{font-family:var(--fs);font-size:28px;color:var(--red);margin-bottom:10px;}
 .banned-card p{font-size:13px;color:var(--muted);line-height:1.6;}
 
+
+
+/* === COMMUNITY SOCKET PATCH === */
+.community-grid{display:grid;grid-template-columns:280px 1fr 300px;gap:16px;align-items:start;}
+.community-card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px;}
+.community-card h3{font-size:15px;color:var(--cream);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+.community-list{display:flex;flex-direction:column;gap:9px;max-height:520px;overflow:auto;}
+.community-user{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px;}
+.community-user-info{flex:1;min-width:0;}
+.community-name{font-size:13px;font-weight:700;color:var(--cream);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.community-sub{font-size:10px;color:var(--muted);margin-top:2px;}
+.online-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--muted);margin-right:5px;}
+.online-dot.on{background:var(--green);box-shadow:0 0 10px rgba(61,220,132,.65);}
+.community-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+.mini-btn{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:5px 8px;font-size:10px;font-weight:700;}
+.mini-btn:hover{border-color:var(--amber);color:var(--amber);}
+.mini-btn.danger{color:var(--red);border-color:rgba(242,107,107,.3);}
+.chat-box{height:360px;overflow:auto;border:1px solid var(--border);border-radius:12px;background:rgba(0,0,0,.16);padding:12px;display:flex;flex-direction:column;gap:8px;}
+.chat-empty{text-align:center;color:var(--muted);font-size:12px;padding:60px 15px;}
+.chat-msg{max-width:78%;padding:8px 10px;border-radius:12px;background:var(--card);font-size:12px;line-height:1.45;}
+.chat-msg.me{align-self:flex-end;background:rgba(233,168,76,.18);border:1px solid rgba(233,168,76,.25);}
+.chat-meta{font-size:9px;color:var(--muted);margin-bottom:3px;}
+.chat-send{display:flex;gap:8px;margin-top:10px;}
+.chat-send input{flex:1;}
+.community-post{border:1px solid var(--border);background:var(--card);border-radius:12px;padding:12px;margin-bottom:10px;}
+.community-post-title{font-family:var(--fs);font-size:17px;color:var(--cream);font-weight:700;margin:7px 0;}
+.community-post-text{font-family:var(--fs);font-size:13px;color:var(--text);line-height:1.7;}
+.notif-modal{max-width:560px;}
+.notif-row{background:var(--card);border:1px solid var(--border);border-radius:11px;padding:12px;margin-bottom:9px;}
+.notif-title{font-size:13px;color:var(--cream);font-weight:700;margin-bottom:5px;}
+.notif-text{font-size:12px;color:var(--muted);line-height:1.45;}
+.notif-actions{display:flex;gap:8px;margin-top:9px;}
+.notif-dot.has{display:block;}
+.report-modal{max-width:460px;}
+@media(max-width:900px){.community-grid{grid-template-columns:1fr}.chat-box{height:300px}}
+
 </style>
 </head>
 <body>
@@ -535,10 +571,10 @@ input,textarea,select{font-family:var(--fn);}
   <div class="tb-right">
     <button class="tb-prem" onclick="switchTab('premium')">Premium</button>
     <div class="notif-w">
-      <button class="tb-btn">
+      <button class="tb-btn" onclick="openNotificationsBM()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       </button>
-      <div class="notif-dot"></div>
+      <div class="notif-dot" id="notifDotBM" style="display:none;"></div>
     </div>
     <div class="user-av" id="topbar-av" onclick="toggleProfile()"><span id="topbar-ini"></span></div>
   </div>
@@ -588,6 +624,10 @@ input,textarea,select{font-family:var(--fn);}
   <button class="ntab" onclick="switchTab('premium')" data-tab="premium">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>Premium
   </button>
+  <button class="ntab" onclick="switchTab('community')" data-tab="community">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Community
+  </button>
+
 </nav>
 
 <main class="main">
@@ -793,6 +833,36 @@ input,textarea,select{font-family:var(--fn);}
   </div>
 </section>
 
+
+
+<!-- COMMUNITY -->
+<section class="section" id="sec-community">
+  <div class="sec-hdr"><div class="sec-title">Community</div><div id="community-status" style="font-size:12px;color:var(--muted);">Friends, chat, requests, reports and shared stories are live with Socket.IO.</div></div>
+  <div class="community-grid">
+    <div class="community-card">
+      <h3>People <span id="commPeopleCount" style="font-size:10px;color:var(--muted);"></span></h3>
+      <input class="finput" id="communitySearchBM" placeholder="Search people..." oninput="renderCommunityBM()" style="margin-bottom:10px;">
+      <div class="community-list" id="communityPeopleBM"></div>
+    </div>
+    <div class="community-card">
+      <h3 id="chatTitleBM">Friend Chat</h3>
+      <div class="chat-box" id="chatBoxBM"><div class="chat-empty">Select a friend to start chatting.</div></div>
+      <div class="chat-send">
+        <input class="finput" id="chatInputBM" placeholder="Write a message..." onkeydown="if(event.key==='Enter')sendDirectMessageBM()">
+        <button class="btn-primary" onclick="sendDirectMessageBM()">Send</button>
+      </div>
+    </div>
+    <div class="community-card">
+      <h3>Share Story</h3>
+      <input class="finput" id="communityStoryTitleBM" placeholder="Story title" style="margin-bottom:8px;">
+      <textarea class="ftextarea" id="communityStoryTextBM" placeholder="Share a short story with the community..." style="min-height:110px;"></textarea>
+      <button class="btn-primary" onclick="shareCommunityStoryBM()" style="width:100%;margin:8px 0 14px;">Share to Community</button>
+      <h3>Community Stories</h3>
+      <div id="communityStoriesBM"></div>
+    </div>
+  </div>
+</section>
+
 </main>
 </div><!-- /app -->
 
@@ -907,6 +977,31 @@ input,textarea,select{font-family:var(--fn);}
         <h3>Connected users</h3>
         <div class="admin-list" id="adminUsersBM"><div style="padding:12px;color:var(--muted);font-size:12px;">Waiting for Socket.IO...</div></div>
       </div>
+    </div>
+  </div>
+</div>
+
+
+
+<div class="moverlay" id="notificationsModalBM">
+  <div class="modal notif-modal">
+    <div class="mclose-row"><button class="mclose" onclick="closeNotificationsBM()">×</button></div>
+    <div class="mbody">
+      <div class="cp-title">Notifications</div>
+      <div class="cp-sub">Friend requests and admin report alerts arrive instantly.</div>
+      <div id="notificationsListBM"></div>
+    </div>
+  </div>
+</div>
+
+<div class="moverlay" id="reportModalBM">
+  <div class="modal report-modal">
+    <div class="mclose-row"><button class="mclose" onclick="closeReportBM()">×</button></div>
+    <div class="mbody">
+      <div class="cp-title">Report User</div>
+      <div class="cp-sub" id="reportUserNameBM">Tell admins why you are reporting this user.</div>
+      <textarea class="ftextarea" id="reportWhyBM" placeholder="Why are you reporting this user?" style="min-height:120px;"></textarea>
+      <button class="btn-primary" onclick="sendReportBM()" style="width:100%;margin-top:10px;">Send Report</button>
     </div>
   </div>
 </div>
@@ -2124,6 +2219,13 @@ function bmConnectSocket(){
     bmSocket.on('admin:unbanned',()=>checkBanBM(false));
     bmSocket.on('profile:sync',profile=>bmApplyServerProfileBM(profile));
     bmSocket.on('profile:update',profile=>bmApplyProfileToStoriesBM(profile));
+    bmSocket.on('community:state',data=>{bmCommunity=data.community||{}; bmAllProfiles=data.profiles||bmAllProfiles||{}; renderCommunityBM(); if(isOwnerUser(CU))bmRenderAdminReportsBM(bmCommunity.reports||[]);});
+    bmSocket.on('friend:request',data=>{bmAddNotification({type:'friend-request',from:data.fromUsername,title:'Friend request',text:(data.fromDisplay||data.fromUsername)+' sent you a friend request.'});});
+    bmSocket.on('friend:update',data=>{bmCommunity=data.community||bmCommunity; renderCommunityBM();});
+    bmSocket.on('dm:new',data=>{bmCommunity=data.community||bmCommunity; if(data.from!==bmMe())bmAddNotification({type:'dm',title:'New message',text:'Message from '+(data.fromDisplay||data.from)}); renderCommunityBM();});
+    bmSocket.on('community:story:new',data=>{bmCommunity=data.community||bmCommunity; if(data.story)showToast('New community story: '+data.story.title); renderCommunityBM();});
+    bmSocket.on('admin:report',data=>{if(isOwnerUser(CU)){bmAddNotification({type:'report',title:'New report',text:'Report against '+data.reportedUsername+' — '+data.why}); bmRenderAdminReportsBM(data.reports||[]);}});
+
   }).catch(()=>bmSetLive(false,'Socket script missing'));
 }
 function bmMergeServerStories(){
@@ -2150,7 +2252,7 @@ function showRestartBM(){
     if(n<=0){clearInterval(t);setTimeout(()=>window.location.reload(),550);}
   },1000);
 }
-function openAdminPanelBM(){if(!isOwnerUser(CU)){showToast('Owner only');return;}document.getElementById('adminPanelBM').classList.add('open'); if(bmSocketReady)bmSocket.emit('admin:get-users',bmCurrentUserPayload()); bmRenderAdminUsers();}
+function openAdminPanelBM(){if(!isOwnerUser(CU)){showToast('Owner only');return;}document.getElementById('adminPanelBM').classList.add('open'); if(bmSocketReady){bmSocket.emit('admin:get-users',bmCurrentUserPayload());bmSocket.emit('admin:get-reports',bmCurrentUserPayload());} bmRenderAdminUsers(); bmRenderAdminReportsBM();}
 function closeAdminPanelBM(){document.getElementById('adminPanelBM').classList.remove('open');}
 function bmRenderAdminUsers(){
   const box=document.getElementById('adminUsersBM'); if(!box)return;
@@ -2313,6 +2415,122 @@ changeProfilePic=function(inp){
     if(bmSocketReady) bmSocket.emit('profile:update',{avatarUrl:data,user:bmCurrentUserPayload()});
   });
 };
+
+
+
+// === COMMUNITY SOCKET.IO PATCH ===
+let bmAllProfiles={}, bmCommunity={}, bmNotifications=[], bmActiveChatUser=null, bmReportTarget=null;
+function bmMe(){return bmCurrentUserPayload().username;}
+function bmProfileOf(username){return bmAllProfiles[username] || (bmConnectedUsers||[]).find(u=>u.username===username) || {username,displayName:username,initials:String(username||'??').slice(0,2).toUpperCase(),avatarUrl:''};}
+function bmIsOnline(username){return (bmConnectedUsers||[]).some(u=>u.username===username);}
+function bmFriendList(){return (bmCommunity.friendships&&bmCommunity.friendships[bmMe()])||[];}
+function bmBlockedList(){return (bmCommunity.blocks&&bmCommunity.blocks[bmMe()])||[];}
+function bmOutgoingRequests(){return (bmCommunity.friendRequests||[]).filter(r=>r.from===bmMe()&&r.status==='pending');}
+function bmIncomingRequests(){return (bmCommunity.friendRequests||[]).filter(r=>r.to===bmMe()&&r.status==='pending');}
+function bmRelation(username){
+  if(username===bmMe()) return 'me';
+  if(bmBlockedList().includes(username)) return 'blocked';
+  if(bmFriendList().includes(username)) return 'friend';
+  if(bmIncomingRequests().some(r=>r.from===username)) return 'incoming';
+  if(bmOutgoingRequests().some(r=>r.to===username)) return 'outgoing';
+  return 'none';
+}
+function communityAvatarBM(profile,size=38){return avatarHTMLBM({user:profile.displayName||profile.username,ini:profile.initials,avatarUrl:profile.avatarUrl,av:'av-b'},size);}
+function renderCommunityBM(){
+  const peopleBox=document.getElementById('communityPeopleBM'); if(!peopleBox)return;
+  const q=(document.getElementById('communitySearchBM')?.value||'').toLowerCase();
+  const profileMap={...(bmAllProfiles||{})};
+  (bmConnectedUsers||[]).forEach(u=>profileMap[u.username]={...profileMap[u.username],...u});
+  const names=Object.keys(profileMap).filter(u=>u!==bmMe() && u!=='' && !((bmCommunity.blocks?.[u]||[]).includes(bmMe())));
+  const filtered=names.filter(u=>{const p=profileMap[u];return !q || u.toLowerCase().includes(q) || (p.displayName||'').toLowerCase().includes(q);}).sort((a,b)=>Number(bmIsOnline(b))-Number(bmIsOnline(a)) || a.localeCompare(b));
+  const count=document.getElementById('commPeopleCount'); if(count) count.textContent=filtered.length+' users';
+  if(!filtered.length){peopleBox.innerHTML='<div style="color:var(--muted);font-size:12px;padding:12px;">No people found. Open another account in another browser to test.</div>';}
+  else peopleBox.innerHTML=filtered.map(username=>{
+    const p=profileMap[username], rel=bmRelation(username), online=bmIsOnline(username);
+    let actions='';
+    if(rel==='friend') actions=`<button class="mini-btn" onclick="openChatBM('${escBM(username)}')">Chat</button><button class="mini-btn" onclick="friendRemoveBM('${escBM(username)}')">Unfriend</button><button class="mini-btn danger" onclick="blockUserBM('${escBM(username)}')">Block</button><button class="mini-btn danger" onclick="openReportBM('${escBM(username)}')">Report</button>`;
+    else if(rel==='incoming') actions=`<button class="mini-btn" onclick="friendRespondBM('${escBM(username)}',true)">Accept</button><button class="mini-btn danger" onclick="friendRespondBM('${escBM(username)}',false)">Decline</button><button class="mini-btn danger" onclick="openReportBM('${escBM(username)}')">Report</button>`;
+    else if(rel==='outgoing') actions=`<button class="mini-btn" disabled>Request sent</button><button class="mini-btn danger" onclick="friendRemoveBM('${escBM(username)}')">Cancel</button>`;
+    else if(rel==='blocked') actions=`<button class="mini-btn" onclick="unblockUserBM('${escBM(username)}')">Unblock</button>`;
+    else actions=`<button class="mini-btn" onclick="friendRequestBM('${escBM(username)}')">Add Friend</button><button class="mini-btn danger" onclick="blockUserBM('${escBM(username)}')">Block</button><button class="mini-btn danger" onclick="openReportBM('${escBM(username)}')">Report</button>`;
+    return `<div class="community-user">${communityAvatarBM(p,38)}<div class="community-user-info"><div class="community-name">${escBM(p.displayName||username)}${p.verified?verifiedHTML({verified:true}):''}</div><div class="community-sub"><span class="online-dot ${online?'on':''}"></span>${online?'Online':'Offline'} · @${escBM(username)}</div><div class="community-actions">${actions}</div></div></div>`;
+  }).join('');
+  renderCommunityStoriesBM(); renderActiveChatBM(); bmRenderNotificationsBM();
+}
+function friendRequestBM(username){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('friend:request',{toUsername:username,user:bmCurrentUserPayload()});}
+function friendRespondBM(fromUsername,accept){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('friend:respond',{fromUsername,accept,user:bmCurrentUserPayload()});}
+function friendRemoveBM(username){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('friend:remove',{username,user:bmCurrentUserPayload()}); if(bmActiveChatUser===username)bmActiveChatUser=null;}
+function blockUserBM(username){if(!bmSocketReady)return showToast('Socket not connected'); if(!confirm('Block '+username+'?'))return; bmSocket.emit('friend:block',{username,user:bmCurrentUserPayload()}); if(bmActiveChatUser===username)bmActiveChatUser=null;}
+function unblockUserBM(username){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('friend:unblock',{username,user:bmCurrentUserPayload()});}
+function openChatBM(username){bmActiveChatUser=username; renderActiveChatBM();}
+function dmKeyBM(a,b){return [a,b].sort().join('::');}
+function renderActiveChatBM(){
+  const box=document.getElementById('chatBoxBM'), title=document.getElementById('chatTitleBM'); if(!box)return;
+  if(!bmActiveChatUser){box.innerHTML='<div class="chat-empty">Select a friend to start chatting.</div>'; if(title)title.textContent='Friend Chat'; return;}
+  const p=bmProfileOf(bmActiveChatUser); if(title)title.textContent='Chat with '+(p.displayName||bmActiveChatUser);
+  const list=(bmCommunity.directMessages&&bmCommunity.directMessages[dmKeyBM(bmMe(),bmActiveChatUser)])||[];
+  if(!list.length) box.innerHTML='<div class="chat-empty">No messages yet. Say hi.</div>';
+  else box.innerHTML=list.map(m=>`<div class="chat-msg ${m.from===bmMe()?'me':''}"><div class="chat-meta">${escBM(m.fromDisplay||m.from)}</div>${escBM(m.text)}</div>`).join('');
+  box.scrollTop=box.scrollHeight;
+}
+function sendDirectMessageBM(){
+  const inp=document.getElementById('chatInputBM'); const text=(inp?.value||'').trim();
+  if(!bmActiveChatUser)return showToast('Select a friend'); if(!text)return; if(!bmSocketReady)return showToast('Socket not connected');
+  bmSocket.emit('dm:send',{toUsername:bmActiveChatUser,text,user:bmCurrentUserPayload()}); inp.value='';
+}
+function shareCommunityStoryBM(){
+  const title=document.getElementById('communityStoryTitleBM').value.trim(); const text=document.getElementById('communityStoryTextBM').value.trim();
+  if(!title||!text)return showToast('Add title and story'); if(!bmSocketReady)return showToast('Socket not connected');
+  bmSocket.emit('community:story:new',{title,text,user:bmCurrentUserPayload()});
+  document.getElementById('communityStoryTitleBM').value=''; document.getElementById('communityStoryTextBM').value='';
+}
+function renderCommunityStoriesBM(){
+  const box=document.getElementById('communityStoriesBM'); if(!box)return;
+  const stories=bmCommunity.communityStories||[];
+  if(!stories.length){box.innerHTML='<div style="color:var(--muted);font-size:12px;padding:10px;">No community stories yet.</div>';return;}
+  box.innerHTML=stories.map(st=>{const p=bmProfileOf(st.username); return `<div class="community-post"><div style="display:flex;align-items:center;gap:9px;">${communityAvatarBM(p,32)}<div><div class="community-name">${escBM(st.displayName||st.username)}</div><div class="community-sub">${new Date(st.time||Date.now()).toLocaleString()}</div></div></div><div class="community-post-title">${escBM(st.title)}</div><div class="community-post-text">${escBM(st.text)}</div></div>`;}).join('');
+}
+function openNotificationsBM(){document.getElementById('notificationsModalBM').classList.add('open'); bmRenderNotificationsBM();}
+function closeNotificationsBM(){document.getElementById('notificationsModalBM').classList.remove('open');}
+function bmAddNotification(n){
+  bmNotifications.unshift({...n,id:n.id||Date.now()+Math.random(),time:Date.now()});
+  bmNotifications=bmNotifications.slice(0,80);
+  localStorage.setItem('bm_notifications',JSON.stringify(bmNotifications));
+  bmRenderNotificationsBM();
+}
+function bmRenderNotificationsBM(){
+  const list=document.getElementById('notificationsListBM'); const dot=document.getElementById('notifDotBM');
+  const incoming=bmIncomingRequests().map(r=>({type:'friend-request',from:r.from,id:'fr-'+r.from,title:'Friend request',text:(bmProfileOf(r.from).displayName||r.from)+' wants to be your friend.'}));
+  const all=[...incoming,...bmNotifications];
+  if(dot)dot.style.display=all.length?'block':'none';
+  if(!list)return;
+  if(!all.length){list.innerHTML='<div style="color:var(--muted);font-size:12px;padding:15px;text-align:center;">No notifications yet.</div>';return;}
+  list.innerHTML=all.map(n=>{
+    const actions=n.type==='friend-request'?`<div class="notif-actions"><button class="btn-primary" onclick="friendRespondBM('${escBM(n.from)}',true)">Accept</button><button class="btn-outline" onclick="friendRespondBM('${escBM(n.from)}',false)">Decline</button></div>`:'';
+    return `<div class="notif-row"><div class="notif-title">${escBM(n.title||'Notification')}</div><div class="notif-text">${escBM(n.text||'')}</div>${actions}</div>`;
+  }).join('');
+}
+function openReportBM(username){bmReportTarget=username; const p=bmProfileOf(username); document.getElementById('reportUserNameBM').textContent='Report '+(p.displayName||username)+' (@'+username+')'; document.getElementById('reportWhyBM').value=''; document.getElementById('reportModalBM').classList.add('open');}
+function closeReportBM(){document.getElementById('reportModalBM').classList.remove('open'); bmReportTarget=null;}
+function sendReportBM(){
+  const why=document.getElementById('reportWhyBM').value.trim();
+  if(!bmReportTarget)return; if(!why)return showToast('Write why you are reporting'); if(!bmSocketReady)return showToast('Socket not connected');
+  bmSocket.emit('report:user',{reportedUsername:bmReportTarget,why,user:bmCurrentUserPayload()}); closeReportBM(); showToast('Report sent to admins');
+}
+function bmRenderAdminReportsBM(reports){
+  let box=document.getElementById('adminReportsBM');
+  if(!box){
+    const adminGrid=document.querySelector('#adminPanelBM .mbody');
+    if(adminGrid){const card=document.createElement('div');card.className='admin-card';card.style.marginTop='14px';card.innerHTML='<h3>Reports to Admins</h3><div class="admin-list" id="adminReportsBM"></div>';adminGrid.appendChild(card);box=document.getElementById('adminReportsBM');}
+  }
+  if(!box)return;
+  const arr=reports||bmCommunity.reports||[];
+  if(!arr.length){box.innerHTML='<div style="padding:12px;color:var(--muted);font-size:12px;">No reports yet.</div>';return;}
+  box.innerHTML=arr.slice().reverse().map(r=>`<div class="admin-user-row"><div><b>Reported: ${escBM(r.reportedUsername)}</b><div style="color:var(--muted);font-size:10px;">By ${escBM(r.reporterDisplay||r.reporterUsername)} · ${new Date(r.time||Date.now()).toLocaleString()}</div><div style="font-size:11px;margin-top:5px;line-height:1.4;">${escBM(r.why)}</div></div></div>`).join('');
+}
+const bmOldSwitchTabCommunity=switchTab;
+switchTab=function(tab){bmOldSwitchTabCommunity(tab); if(tab==='community')renderCommunityBM();};
+try{bmNotifications=JSON.parse(localStorage.getItem('bm_notifications')||'[]');}catch{bmNotifications=[];}
 
 bmConnectSocket();
 
