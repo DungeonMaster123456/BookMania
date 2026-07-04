@@ -322,16 +322,19 @@ io.on('connection', socket => {
   });
 
   socket.on('community:story:new', data => {
-    const me = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
+    const sent = profileFromUser(data?.user, socket.id);
+    const live = liveUsers.get(socket.id);
+    const me = (sent.owner || sent.verified || sent.username === OWNER_USERNAME) ? sent : (live || sent);
     if (isBanned(me.username, me.owner)) return socket.emit('admin:banned');
+    const verified = !!me.verified || !!me.owner || me.username === OWNER_USERNAME || me.displayName === OWNER_USERNAME || !!data?.verified || !!data?.owner;
     const story = {
       id: Date.now(),
-      username: me.username,
-      displayName: me.displayName,
-      initials: me.initials,
+      username: verified ? OWNER_USERNAME : me.username,
+      displayName: verified ? OWNER_USERNAME : me.displayName,
+      initials: verified ? 'BM' : me.initials,
       avatarUrl: me.avatarUrl,
-      verified: !!me.verified,
-      owner: !!me.owner,
+      verified,
+      owner: !!me.owner || verified,
       title: safeText(data?.title, 120),
       text: safeText(data?.text, 5000),
       time: Date.now()

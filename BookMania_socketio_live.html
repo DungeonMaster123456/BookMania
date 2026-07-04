@@ -2621,6 +2621,74 @@ shareCommunityStoryBM=function(){
   document.getElementById('communityStoryTextBM').value='';
 };
 
+
+// === BOOKMANIA HOTFIX: logout black screen + owner tick in community stories ===
+function bmShowAuthScreenHard(){
+  try{localStorage.removeItem('bm_sess');}catch(e){}
+  CU=null;
+  try{closeProfile();}catch(e){}
+  ['bookModal','readerModal','commentModalBM','adminPanelBM','reportModalBM','profileZoomBM','aiAssistModal'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.classList.remove('open'); el.style.display='';}
+  });
+  const app=document.getElementById('app');
+  if(app){app.style.display='none'; app.setAttribute('aria-hidden','true');}
+  const splash=document.getElementById('intro-splash');
+  if(splash){
+    splash.classList.remove('fade-out');
+    splash.style.display='none';
+    splash.style.visibility='hidden';
+    splash.style.opacity='0';
+    splash.style.pointerEvents='none';
+  }
+  const auth=document.getElementById('auth-screen');
+  if(auth){
+    auth.classList.add('show');
+    auth.style.display='flex';
+    auth.style.visibility='visible';
+    auth.style.opacity='1';
+    auth.style.pointerEvents='auto';
+    auth.style.zIndex='10050';
+  }
+  const login=document.getElementById('login-form'), signup=document.getElementById('signup-form');
+  if(login)login.style.display='block';
+  if(signup)signup.style.display='none';
+  document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active',i===0));
+  document.documentElement.style.background='var(--ink)';
+  document.body.style.background='var(--ink)';
+}
+doLogout=function(){bmShowAuthScreenHard();};
+
+function bmIsVerifiedStoryAuthorBM(st, prof){
+  const uname=String(st?.username||prof?.username||'');
+  const dname=String(st?.displayName||prof?.displayName||'');
+  return !!(st?.verified || st?.owner || prof?.verified || prof?.owner || uname==='BookMania' || dname==='BookMania');
+}
+renderCommunityStoriesBM=function(){
+  const box=document.getElementById('communityStoriesBM'); if(!box)return;
+  const stories=(bmCommunity&&bmCommunity.communityStories)||[];
+  if(!stories.length){box.innerHTML='<div style="color:var(--muted);font-size:12px;padding:10px;">No community stories yet.</div>';return;}
+  box.innerHTML=stories.map(st=>{
+    const base=bmProfileOf(st.username);
+    const verified=bmIsVerifiedStoryAuthorBM(st,base);
+    const p={...base,displayName:st.displayName||base.displayName||st.username,avatarUrl:st.avatarUrl||base.avatarUrl,initials:st.initials||base.initials,verified,owner:!!st.owner||!!base.owner};
+    return `<div class="community-post"><div style="display:flex;align-items:center;gap:9px;">${communityAvatarBM(p,32)}<div><div class="community-name">${escBM(p.displayName||st.username)}${verifiedHTML({verified})}</div><div class="community-sub">${new Date(st.time||Date.now()).toLocaleString()}</div></div></div><div class="community-post-title">${escBM(st.title)}</div><div class="community-post-text">${escBM(st.text)}</div></div>`;
+  }).join('');
+};
+shareCommunityStoryBM=function(){
+  const title=document.getElementById('communityStoryTitleBM').value.trim();
+  const text=document.getElementById('communityStoryTextBM').value.trim();
+  if(!title||!text)return showToast('Add title and story');
+  if(!bmSocketReady)return showToast('Socket not connected');
+  const user=bmCurrentUserPayload();
+  if(isOwnerUser(CU)){user.username='BookMania';user.displayName='BookMania';user.initials='BM';user.owner=true;user.verified=true;}
+  bmSocket.emit('user:hello',user);
+  bmSocket.emit('community:story:new',{title,text,user,verified:!!user.verified,owner:!!user.owner});
+  document.getElementById('communityStoryTitleBM').value='';
+  document.getElementById('communityStoryTextBM').value='';
+};
+
+
 bmConnectSocket();
 
 
