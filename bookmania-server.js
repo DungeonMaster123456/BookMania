@@ -116,6 +116,24 @@ function saveProfile(p) {
     lastSeen: Date.now()
   };
 }
+function setVerified(username, verified) {
+  if (!username || username === OWNER_USERNAME) return;
+  const old = state.profiles[username] || {};
+  state.profiles[username] = {
+    ...old,
+    username,
+    displayName: old.displayName || username,
+    initials: old.initials || username.slice(0, 2).toUpperCase(),
+    avatarUrl: old.avatarUrl || '',
+    owner: !!old.owner,
+    verified: !!verified,
+    lastSeen: Date.now()
+  };
+  for (const u of liveUsers.values()) if (u.username === username) u.verified = !!verified;
+  state.stories.forEach(s => { if (s.username === username) s.verified = !!verified; });
+  Object.values(state.comments).forEach(list => (list || []).forEach(c => { if (c.username === username) c.verified = !!verified; }));
+  state.community.communityStories.forEach(s => { if (s.username === username) s.verified = !!verified; });
+}
 function storyExists(id) { return state.stories.some(s => String(s.id) === String(id)); }
 function cleanStory(story, user, restored = false) {
   return {
@@ -256,6 +274,20 @@ io.on('connection', socket => {
     saveState(); emitUsers();
     for (const [sid, u] of liveUsers.entries()) if (u.username === username) io.to(sid).emit('admin:unbanned');
   });
+  socket.on('admin:verify', data => {
+    if (!isAdmin(data?.admin)) return;
+    const username = safeText(data?.username, 60);
+    setVerified(username, true);
+    saveState(); emitUsers();
+    for (const [sid, u] of liveUsers.entries()) if (u.username === username) io.to(sid).emit('admin:verify-update', { verified: true });
+  });
+  socket.on('admin:unverify', data => {
+    if (!isAdmin(data?.admin)) return;
+    const username = safeText(data?.username, 60);
+    setVerified(username, false);
+    saveState(); emitUsers();
+    for (const [sid, u] of liveUsers.entries()) if (u.username === username) io.to(sid).emit('admin:verify-update', { verified: false });
+  });
 
   socket.on('friend:request', data => {
     const me = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
@@ -326,15 +358,16 @@ io.on('connection', socket => {
     const live = liveUsers.get(socket.id);
     const me = (sent.owner || sent.verified || sent.username === OWNER_USERNAME) ? sent : (live || sent);
     if (isBanned(me.username, me.owner)) return socket.emit('admin:banned');
-    const verified = !!me.verified || !!me.owner || me.username === OWNER_USERNAME || me.displayName === OWNER_USERNAME || !!data?.verified || !!data?.owner;
+    const owner = !!me.owner || me.username === OWNER_USERNAME || me.displayName === OWNER_USERNAME || !!data?.owner;
+    const verified = owner || !!me.verified || !!data?.verified;
     const story = {
       id: Date.now(),
-      username: verified ? OWNER_USERNAME : me.username,
-      displayName: verified ? OWNER_USERNAME : me.displayName,
-      initials: verified ? 'BM' : me.initials,
+      username: owner ? OWNER_USERNAME : me.username,
+      displayName: owner ? OWNER_USERNAME : me.displayName,
+      initials: owner ? 'BM' : me.initials,
       avatarUrl: me.avatarUrl,
       verified,
-      owner: !!me.owner || verified,
+      owner,
       title: safeText(data?.title, 120),
       text: safeText(data?.text, 5000),
       time: Date.now()

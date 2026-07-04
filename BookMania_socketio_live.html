@@ -967,9 +967,9 @@ input,textarea,select{font-family:var(--fn);}
           </div>
         </div>
         <div class="admin-card">
-          <h3>Ban / unban by command</h3>
-          <p>Type commands like: <b>/ban username</b> or <b>/unban username</b></p>
-          <input class="finput" id="adminCommandBM" placeholder="/ban Aarush">
+          <h3>Ban / verify by command</h3>
+          <p>Type commands like: <b>/ban username</b>, <b>/unban username</b>, <b>/verify username</b> or <b>/unverify username</b></p>
+          <input class="finput" id="adminCommandBM" placeholder="/verify Aarush">
           <button class="btn-primary" onclick="adminRunCommandBM()" style="width:100%;margin-top:9px;">Run Command</button>
         </div>
       </div>
@@ -1842,7 +1842,7 @@ function showToast(msg){
 
 // === BOOKMANIA UPGRADE PATCH ===
 function escBM(v){return String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-function isOwnerUser(u){return !!u && (u.owner===true || u.verified===true || u.un==='BookMania' || u.fn==='BookMania');}
+function isOwnerUser(u){return !!u && (u.owner===true || u.un==='BookMania' || u.fn==='BookMania');}
 function ownerPassBM(){return [48,50,48,53,48,49].map(c=>String.fromCharCode(c)).join('');}
 function verifiedHTML(s){return (s && (s.verified || s.user==='BookMania')) ? '<span class="verified-tick" title="Verified owner">✓</span>' : '';}
 function ensureOwnerAccount(){
@@ -1985,7 +1985,7 @@ publishStory=function(){
   const owner=isOwnerUser(CU);
   const displayName=owner?'BookMania':(CU.fn+' '+(CU.ln||'')).trim();
   const ini=owner?'BM':(CU.fn[0]+(CU.ln?CU.ln[0]:'')).toUpperCase();
-  const storyObj={id:Date.now(),user:displayName,ini,av:owner?'av-e':avs[Math.floor(Math.random()*avs.length)],title,genre:document.getElementById('s-genre').value,excerpt:allContent,pages:[...storyPages],time:'Just now',isPrem:isPrem||isCharged,price,likes:0,comments:0,verified:owner,owner:owner};
+  const storyObj={id:Date.now(),user:displayName,ini,av:owner?'av-e':avs[Math.floor(Math.random()*avs.length)],title,genre:document.getElementById('s-genre').value,excerpt:allContent,pages:[...storyPages],time:'Just now',isPrem:isPrem||isCharged,price,likes:0,comments:0,verified:(owner||!!CU.verified),owner:owner};
   pubStories.unshift(storyObj);
   localStorage.setItem('bm_pub_stories',JSON.stringify(pubStories));
   storyPages=[''];curPageIdx=0;
@@ -2086,6 +2086,7 @@ updateUI=function(){
   }
   const name=document.getElementById('pdrop-name');
   if(isOwnerUser(CU) && name){name.innerHTML='BookMania <span class="verified-tick" title="Verified owner">✓</span><span class="owner-pill">Owner</span>';}
+  else if(CU && CU.verified && name){name.innerHTML=escBM(((CU.fn||'')+' '+(CU.ln||'')).trim()||CU.un||'User')+' <span class="verified-tick" title="Verified">✓</span>';}
   const da=document.getElementById('pdrop-av');
   if(da){
     if(CU.av){da.innerHTML=`<button class="avatar-click" onclick="event.stopPropagation();zoomAvatarBM('${CU.av.replace(/'/g,"&#39;")}','${escBM((CU.fn+' '+(CU.ln||'')).trim())}')"><img src="${CU.av}" style="width:48px;height:48px;object-fit:cover;border-radius:50%;"></button>`;}
@@ -2151,7 +2152,7 @@ publishStory=function(){
   const owner=isOwnerUser(CU);
   const displayName=owner?'BookMania':(CU.fn+' '+(CU.ln||'')).trim();
   const ini=owner?'BM':userInitialsBM(CU);
-  const storyObj={id:Date.now(),user:displayName,ini,av:owner?'av-e':avs[Math.floor(Math.random()*avs.length)],avatarUrl:CU.av||'',title,genre:document.getElementById('s-genre').value,excerpt:allContent,pages:[...storyPages],time:'Just now',isPrem:isPrem||isCharged,price,likes:0,comments:0,verified:owner,owner:owner};
+  const storyObj={id:Date.now(),user:displayName,ini,av:owner?'av-e':avs[Math.floor(Math.random()*avs.length)],avatarUrl:CU.av||'',title,genre:document.getElementById('s-genre').value,excerpt:allContent,pages:[...storyPages],time:'Just now',isPrem:isPrem||isCharged,price,likes:0,comments:0,verified:(owner||!!CU.verified),owner:owner};
   pubStories.unshift(storyObj);localStorage.setItem('bm_pub_stories',JSON.stringify(pubStories));
   storyPages=[''];curPageIdx=0;
   document.getElementById('s-title').value='';document.getElementById('s-content').value='';document.getElementById('wc-display').textContent='0 words';renderPageTabs();renderStories();switchTab('see');showToast(owner?'Published as BookMania ✓':'Story published with your profile picture');
@@ -2170,7 +2171,7 @@ function bmCurrentUserPayload(){
     initials: isOwnerUser(CU)?'BM':userInitialsBM(CU),
     avatarUrl: CU?.av||'',
     owner: !!isOwnerUser(CU),
-    verified: !!isOwnerUser(CU)
+    verified: !!isOwnerUser(CU) || !!CU?.verified
   };
 }
 function bmSetLive(on,msg){
@@ -2217,6 +2218,14 @@ function bmConnectSocket(){
     bmSocket.on('admin:restart',()=>showRestartBM());
     bmSocket.on('admin:banned',()=>checkBanBM(true));
     bmSocket.on('admin:unbanned',()=>checkBanBM(false));
+    bmSocket.on('admin:verify-update',data=>{
+      if(!CU)return;
+      const verified=!!data?.verified;
+      CU.verified=verified;
+      const us=getU(); if(us[CU.un]) us[CU.un].verified=verified;
+      saveU(us); updateUI();
+      showToast(verified?'You are now verified ✓':'Your verified tick was removed');
+    });
     bmSocket.on('profile:sync',profile=>bmApplyServerProfileBM(profile));
     bmSocket.on('profile:update',profile=>bmApplyProfileToStoriesBM(profile));
     bmSocket.on('community:state',data=>{bmCommunity=data.community||{}; bmAllProfiles=data.profiles||bmAllProfiles||{}; renderCommunityBM(); if(isOwnerUser(CU))bmRenderAdminReportsBM(bmCommunity.reports||[]);});
@@ -2258,17 +2267,20 @@ function bmRenderAdminUsers(){
   const box=document.getElementById('adminUsersBM'); if(!box)return;
   const users=bmConnectedUsers||[];
   if(!users.length){box.innerHTML='<div style="padding:12px;color:var(--muted);font-size:12px;">No live users yet. Open another browser tab to test.</div>';return;}
-  box.innerHTML=users.map(u=>{const banned=(bmBannedUsers||[]).includes(u.username);return `<div class="admin-user-row"><div><b>${escBM(u.displayName||u.username)}</b><div style="color:var(--muted);font-size:10px;">${escBM(u.username)}</div></div><div style="display:flex;gap:6px;align-items:center;"><span class="admin-chip ${banned?'':'ok'}">${banned?'BANNED':'LIVE'}</span><button class="btn-outline" style="padding:5px 8px;font-size:10px;" onclick="adminBanBM('${escBM(u.username)}',${!banned})">${banned?'Unban':'Ban'}</button></div></div>`;}).join('');
+  box.innerHTML=users.map(u=>{const banned=(bmBannedUsers||[]).includes(u.username);const verified=!!u.verified;const isOwnerRow=!!u.owner||u.username==='BookMania';return `<div class="admin-user-row"><div><b>${escBM(u.displayName||u.username)}</b>${verified?' <span class="verified-tick" title="Verified">✓</span>':''}<div style="color:var(--muted);font-size:10px;">${escBM(u.username)}</div></div><div style="display:flex;gap:6px;align-items:center;"><span class="admin-chip ${banned?'':'ok'}">${banned?'BANNED':'LIVE'}</span>${isOwnerRow?'':`<button class="btn-outline" style="padding:5px 8px;font-size:10px;" onclick="adminVerifyBM('${escBM(u.username)}',${!verified})">${verified?'Unverify':'Verify ✓'}</button>`}<button class="btn-outline" style="padding:5px 8px;font-size:10px;" onclick="adminBanBM('${escBM(u.username)}',${!banned})">${banned?'Unban':'Ban'}</button></div></div>`;}).join('');
 }
 function adminRestartBM(){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('admin:restart',bmCurrentUserPayload());}
 function adminSendGlobalBM(){const msg=document.getElementById('adminGlobalTextBM').value.trim(); if(!msg)return showToast('Write a message'); bmSocket.emit('admin:global',{admin:bmCurrentUserPayload(),message:msg});}
 function adminClearGlobalBM(){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('admin:global-clear',bmCurrentUserPayload());}
 function adminBanBM(username,ban){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit(ban?'admin:ban':'admin:unban',{admin:bmCurrentUserPayload(),username});}
+function adminVerifyBM(username,verify){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit(verify?'admin:verify':'admin:unverify',{admin:bmCurrentUserPayload(),username}); showToast(verify?'Verified @'+username:'Removed verification from @'+username);}
 function adminRunCommandBM(){
   const raw=document.getElementById('adminCommandBM').value.trim();
-  const m=raw.match(/^\/(ban|unban)\s+(.+)$/i);
-  if(!m)return showToast('Use /ban username or /unban username');
-  adminBanBM(m[2].trim(),m[1].toLowerCase()==='ban');
+  const m=raw.match(/^\/(ban|unban|verify|unverify)\s+(.+)$/i);
+  if(!m)return showToast('Use /ban, /unban, /verify or /unverify username');
+  const cmd=m[1].toLowerCase(), target=m[2].trim();
+  if(cmd==='ban'||cmd==='unban') adminBanBM(target,cmd==='ban');
+  else adminVerifyBM(target,cmd==='verify');
   document.getElementById('adminCommandBM').value='';
 }
 function openCommentsBM(id){
@@ -2349,7 +2361,7 @@ publishStory=function(){
   const owner=isOwnerUser(CU);
   const displayName=owner?'BookMania':((CU.fn||'Guest')+' '+(CU.ln||'')).trim();
   const ini=owner?'BM':userInitialsBM(CU);
-  const storyObj={id:Date.now(),user:displayName,username:CU?.un||displayName,ini,av:owner?'av-e':avs[Math.floor(Math.random()*avs.length)],avatarUrl:CU.av||'',title,genre:document.getElementById('s-genre').value,excerpt:allContent,pages:[...storyPages],time:'Just now',isPrem:isPrem||isCharged,price,likes:0,comments:0,verified:owner,owner:owner};
+  const storyObj={id:Date.now(),user:displayName,username:CU?.un||displayName,ini,av:owner?'av-e':avs[Math.floor(Math.random()*avs.length)],avatarUrl:CU.av||'',title,genre:document.getElementById('s-genre').value,excerpt:allContent,pages:[...storyPages],time:'Just now',isPrem:isPrem||isCharged,price,likes:0,comments:0,verified:(owner||!!CU.verified),owner:owner};
   pubStories.unshift(storyObj);localStorage.setItem('bm_pub_stories',JSON.stringify(pubStories));
   if(bmSocketReady) bmSocket.emit('story:new',storyObj); else showToast('Saved locally. Start server for instant live posting.');
   storyPages=[''];curPageIdx=0;
