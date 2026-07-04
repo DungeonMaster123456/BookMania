@@ -6,7 +6,7 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const io = new Server(server, { cors: { origin: '*' }, maxHttpBufferSize: 2e6 });
 
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(__dirname, 'bookmania-live-data.json');
@@ -19,30 +19,40 @@ let state = {
   bannedUsers: [],
   globalMessage: '',
   profiles: {},
-  friendships: {},
-  friendRequests: [],
-  blocks: {},
-  directMessages: {},
-  communityStories: [],
-  reports: []
+  community: {
+    friendships: {},
+    friendRequests: [],
+    directMessages: {},
+    blocks: {},
+    reports: [],
+    communityStories: []
+  }
 };
 const liveUsers = new Map();
 
+function normalizeState() {
+  state.stories = Array.isArray(state.stories) ? state.stories : [];
+  state.comments = state.comments && typeof state.comments === 'object' ? state.comments : {};
+  state.bannedUsers = Array.isArray(state.bannedUsers) ? state.bannedUsers : [];
+  state.globalMessage = typeof state.globalMessage === 'string' ? state.globalMessage : '';
+  state.profiles = state.profiles && typeof state.profiles === 'object' ? state.profiles : {};
+  state.community = state.community && typeof state.community === 'object' ? state.community : {};
+  state.community.friendships = state.community.friendships && typeof state.community.friendships === 'object' ? state.community.friendships : {};
+  state.community.friendRequests = Array.isArray(state.community.friendRequests) ? state.community.friendRequests : [];
+  state.community.directMessages = state.community.directMessages && typeof state.community.directMessages === 'object' ? state.community.directMessages : {};
+  state.community.blocks = state.community.blocks && typeof state.community.blocks === 'object' ? state.community.blocks : {};
+  state.community.reports = Array.isArray(state.community.reports) ? state.community.reports : [];
+  state.community.communityStories = Array.isArray(state.community.communityStories) ? state.community.communityStories : [];
+}
 function loadState() {
   try {
     if (fs.existsSync(DATA_FILE)) {
       state = { ...state, ...JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')) };
-      state.profiles = state.profiles || {};
-      state.friendships = state.friendships || {};
-      state.friendRequests = state.friendRequests || [];
-      state.blocks = state.blocks || {};
-      state.directMessages = state.directMessages || {};
-      state.communityStories = state.communityStories || [];
-      state.reports = state.reports || [];
     }
   } catch (err) {
     console.warn('Could not load data file:', err.message);
   }
+  normalizeState();
 }
 function saveState() {
   try {
@@ -50,6 +60,23 @@ function saveState() {
   } catch (err) {
     console.warn('Could not save data file:', err.message);
   }
+}
+function safeText(v, max = 2000) {
+  return String(v || '').trim().slice(0, max);
+}
+function profileFromUser(user, socketId = '') {
+  const username = safeText(user?.username || user?.un || `Guest-${socketId.slice(0, 5)}`, 60);
+  const displayName = safeText(user?.displayName || user?.name || username, 80);
+  const owner = !!user?.owner || username === OWNER_USERNAME || displayName === OWNER_USERNAME;
+  return {
+    username,
+    displayName: owner ? OWNER_USERNAME : displayName,
+    initials: safeText(user?.initials || (owner ? 'BM' : displayName.slice(0, 2).toUpperCase()), 4),
+    avatarUrl: safeText(user?.avatarUrl || user?.av || '', 200000),
+    owner,
+    verified: !!user?.verified || owner,
+    socketId
+  };
 }
 function publicUsers() {
   return Array.from(liveUsers.values()).map(u => ({
@@ -63,60 +90,57 @@ function publicUsers() {
 }
 function isAdmin(user) {
   if (!user) return false;
-  // Frontend sends owner:true only after logging into the hidden owner account.
-  // For production, add real sessions/JWT. This is a local demo admin check.
   return user.owner === true || user.username === OWNER_USERNAME || user.displayName === OWNER_USERNAME;
+}
+function isBanned(username, owner) {
+  return state.bannedUsers.includes(username) && !owner;
 }
 function emitUsers() {
   io.emit('admin:users', { users: publicUsers(), bannedUsers: state.bannedUsers });
+  emitCommunityState();
 }
-function safeText(v, max = 2000) {
-  return String(v || '').trim().slice(0, max);
+function emitCommunityState(target = io) {
+  target.emit('community:state', { community: state.community, profiles: state.profiles });
 }
-
-function communityState() {
-  return {
-    friendships: state.friendships || {},
-    friendRequests: state.friendRequests || [],
-    blocks: state.blocks || {},
-    directMessages: state.directMessages || {},
-    communityStories: state.communityStories || [],
-    reports: state.reports || []
+function saveProfile(p) {
+  if (!p.username) return;
+  const old = state.profiles[p.username] || {};
+  state.profiles[p.username] = {
+    ...old,
+    username: p.username,
+    displayName: p.displayName || old.displayName || p.username,
+    initials: p.initials || old.initials || p.username.slice(0, 2).toUpperCase(),
+    avatarUrl: p.avatarUrl || old.avatarUrl || '',
+    owner: !!p.owner || !!old.owner,
+    verified: !!p.verified || !!old.verified || p.username === OWNER_USERNAME,
+    lastSeen: Date.now()
   };
 }
-function emitCommunity(target) {
-  const payload = { community: communityState(), profiles: state.profiles, users: publicUsers() };
-  if (target) target.emit('community:state', payload);
-  else io.emit('community:state', payload);
+function storyExists(id) { return state.stories.some(s => String(s.id) === String(id)); }
+function cleanStory(story, user, restored = false) {
+  return {
+    id: story?.id || Date.now(),
+    user: safeText(story?.user || user?.displayName || 'Guest', 80),
+    username: safeText(story?.username || user?.username || 'Guest', 60),
+    ini: safeText(story?.ini || user?.initials || 'GU', 4),
+    av: safeText(story?.av || 'av-a', 20),
+    avatarUrl: safeText(story?.avatarUrl || user?.avatarUrl || '', 200000),
+    title: safeText(story?.title || 'Untitled', 120),
+    genre: safeText(story?.genre || 'fiction', 40),
+    excerpt: safeText(story?.excerpt || '', 30000),
+    pages: Array.isArray(story?.pages) ? story.pages.map(p => safeText(p, 30000)).slice(0, 80) : [],
+    time: restored ? safeText(story?.time || 'Saved story', 40) : 'Just now',
+    isPrem: !!story?.isPrem,
+    price: Number(story?.price || 0),
+    likes: Number(story?.likes || 0),
+    comments: Number(story?.comments || 0),
+    verified: !!story?.verified || !!user?.verified,
+    owner: !!story?.owner || !!user?.owner
+  };
 }
-function socketsForUsername(username) {
-  const ids = [];
-  for (const [sid, u] of liveUsers.entries()) if (u.username === username) ids.push(sid);
-  return ids;
-}
-function sendToUsername(username, event, payload) {
-  socketsForUsername(username).forEach(sid => io.to(sid).emit(event, payload));
-}
-function dmKey(a, b) {
-  return [a, b].sort().join('::');
-}
-function addFriend(a, b) {
-  state.friendships[a] = state.friendships[a] || [];
-  state.friendships[b] = state.friendships[b] || [];
-  if (!state.friendships[a].includes(b)) state.friendships[a].push(b);
-  if (!state.friendships[b].includes(a)) state.friendships[b].push(a);
-}
-function removeFriend(a, b) {
-  state.friendships[a] = (state.friendships[a] || []).filter(x => x !== b);
-  state.friendships[b] = (state.friendships[b] || []).filter(x => x !== a);
-  state.friendRequests = (state.friendRequests || []).filter(r => !((r.from === a && r.to === b) || (r.from === b && r.to === a)));
-}
-function isBlockedEither(a, b) {
-  return (state.blocks[a] || []).includes(b) || (state.blocks[b] || []).includes(a);
-}
-function isFriend(a, b) {
-  return (state.friendships[a] || []).includes(b);
-}
+function dmKey(a, b) { return [a, b].sort().join('::'); }
+function addUnique(list, item) { if (!list.includes(item)) list.push(item); }
+function removeFrom(list, item) { return (list || []).filter(x => x !== item); }
 
 loadState();
 
@@ -125,63 +149,48 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'BookMania_socketio
 
 io.on('connection', socket => {
   socket.on('user:hello', user => {
-    const username = safeText(user?.username || `Guest-${socket.id.slice(0, 5)}`, 60);
-    const displayName = safeText(user?.displayName || username, 80);
-    const savedProfile = state.profiles[username] || {};
-    const incomingAvatar = safeText(user?.avatarUrl || '', 200000);
-    const avatarUrl = incomingAvatar || safeText(savedProfile.avatarUrl || '', 200000);
-    const normalized = {
-      username,
-      displayName,
-      initials: safeText(user?.initials || savedProfile.initials || displayName.slice(0, 2).toUpperCase(), 4),
-      avatarUrl,
-      owner: !!user?.owner || username === OWNER_USERNAME,
-      verified: !!user?.verified || username === OWNER_USERNAME,
-      socketId: socket.id
-    };
-    state.profiles[username] = {
-      username,
-      displayName: normalized.displayName,
-      initials: normalized.initials,
-      avatarUrl: normalized.avatarUrl,
-      owner: normalized.owner,
-      verified: normalized.verified,
-      updatedAt: Date.now()
-    };
-    saveState();
+    const normalized = profileFromUser(user, socket.id);
     liveUsers.set(socket.id, normalized);
-    socket.emit('state:init', { ...state, users: publicUsers(), myProfile: state.profiles[username] });
-    socket.emit('profile:sync', state.profiles[username]);
-    emitCommunity(socket);
-    if (state.bannedUsers.includes(username) && !normalized.owner) socket.emit('admin:banned');
+    saveProfile(normalized);
+    saveState();
+    socket.emit('state:init', { ...state, users: publicUsers() });
+    if (isBanned(normalized.username, normalized.owner)) socket.emit('admin:banned');
+    emitUsers();
+  });
+
+  socket.on('profile:update', data => {
+    const user = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
+    if (!user.username) return;
+    const avatarUrl = safeText(data?.avatarUrl || data?.user?.avatarUrl || '', 200000);
+    user.avatarUrl = avatarUrl;
+    saveProfile({ ...user, avatarUrl });
+    state.stories.forEach(s => { if (s.username === user.username) s.avatarUrl = avatarUrl; });
+    Object.values(state.comments).forEach(list => (list || []).forEach(c => { if (c.username === user.username) c.avatarUrl = avatarUrl; }));
+    state.community.communityStories.forEach(s => { if (s.username === user.username) s.avatarUrl = avatarUrl; });
+    saveState();
+    socket.emit('profile:sync', state.profiles[user.username]);
+    io.emit('profile:update', state.profiles[user.username]);
     emitUsers();
   });
 
   socket.on('story:new', story => {
-    const user = liveUsers.get(socket.id);
-    if (user && state.bannedUsers.includes(user.username) && !user.owner) return socket.emit('admin:banned');
-    const clean = {
-      id: story?.id || Date.now(),
-      user: safeText(story?.user || user?.displayName || 'Guest', 80),
-      username: safeText(story?.username || user?.username || 'Guest', 60),
-      ini: safeText(story?.ini || user?.initials || 'GU', 4),
-      av: safeText(story?.av || 'av-a', 20),
-      avatarUrl: safeText(story?.avatarUrl || user?.avatarUrl || '', 200000),
-      title: safeText(story?.title || 'Untitled', 120),
-      genre: safeText(story?.genre || 'fiction', 40),
-      excerpt: safeText(story?.excerpt || '', 30000),
-      pages: Array.isArray(story?.pages) ? story.pages.map(p => safeText(p, 30000)).slice(0, 80) : [],
-      time: 'Just now',
-      isPrem: !!story?.isPrem,
-      price: Number(story?.price || 0),
-      likes: 0,
-      comments: 0,
-      verified: !!story?.verified || !!user?.verified,
-      owner: !!story?.owner || !!user?.owner
-    };
-    state.stories.unshift(clean);
+    const user = liveUsers.get(socket.id) || profileFromUser(story?.user, socket.id);
+    if (isBanned(user.username, user.owner)) return socket.emit('admin:banned');
+    const clean = cleanStory(story, user, false);
+    if (!storyExists(clean.id)) state.stories.unshift(clean);
     saveState();
-    socket.broadcast.emit('story:new', clean);
+    io.emit('story:new', clean);
+  });
+
+  socket.on('story:restore', story => {
+    const user = liveUsers.get(socket.id) || profileFromUser(story?.user, socket.id);
+    if (isBanned(user.username, user.owner)) return socket.emit('admin:banned');
+    const clean = cleanStory(story, user, true);
+    if (!storyExists(clean.id)) {
+      state.stories.unshift(clean);
+      saveState();
+      io.emit('story:new', clean);
+    }
   });
 
   socket.on('story:like', data => {
@@ -197,48 +206,18 @@ io.on('connection', socket => {
     socket.emit('comment:new', { storyId: data?.storyId, comments: state.comments[storyId] || [] });
   });
 
-
-  socket.on('profile:update', data => {
-    const user = liveUsers.get(socket.id);
-    if (!user) return;
-    const avatarUrl = safeText(data?.avatarUrl || '', 200000);
-    const profile = {
-      username: user.username,
-      displayName: user.displayName,
-      initials: user.initials,
-      avatarUrl,
-      owner: !!user.owner,
-      verified: !!user.verified,
-      updatedAt: Date.now()
-    };
-    state.profiles[user.username] = profile;
-    user.avatarUrl = avatarUrl;
-    // Update old posts/comments too, so a changed profile picture appears everywhere.
-    state.stories.forEach(st => {
-      if (st.username === user.username || st.user === user.displayName) st.avatarUrl = avatarUrl;
-    });
-    Object.values(state.comments).forEach(list => {
-      (list || []).forEach(c => { if (c.username === user.username) c.avatarUrl = avatarUrl; });
-    });
-    saveState();
-    socket.emit('profile:sync', profile);
-    io.emit('profile:update', profile);
-    emitUsers();
-    emitCommunity();
-  });
-
   socket.on('comment:new', data => {
-    const user = liveUsers.get(socket.id);
-    if (user && state.bannedUsers.includes(user.username) && !user.owner) return socket.emit('admin:banned');
+    const user = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
+    if (isBanned(user.username, user.owner)) return socket.emit('admin:banned');
     const storyId = String(data?.storyId || '');
     if (!storyId) return;
     const comment = {
       id: Date.now(),
-      username: safeText(data?.user?.username || user?.username || 'Guest', 60),
-      displayName: safeText(data?.user?.displayName || user?.displayName || 'Guest', 80),
-      initials: safeText(data?.user?.initials || user?.initials || 'GU', 4),
-      avatarUrl: safeText(data?.user?.avatarUrl || user?.avatarUrl || '', 200000),
-      verified: !!data?.user?.verified || !!user?.verified,
+      username: safeText(data?.user?.username || user.username, 60),
+      displayName: safeText(data?.user?.displayName || user.displayName, 80),
+      initials: safeText(data?.user?.initials || user.initials, 4),
+      avatarUrl: safeText(data?.user?.avatarUrl || user.avatarUrl, 200000),
+      verified: !!data?.user?.verified || !!user.verified,
       text: safeText(data?.text || '', 1000),
       time: Date.now()
     };
@@ -252,163 +231,135 @@ io.on('connection', socket => {
   });
 
   socket.on('admin:get-users', admin => { if (isAdmin(admin)) socket.emit('admin:users', { users: publicUsers(), bannedUsers: state.bannedUsers }); });
-
+  socket.on('admin:get-reports', admin => { if (isAdmin(admin)) socket.emit('admin:report', { reports: state.community.reports }); });
   socket.on('admin:global', data => {
     if (!isAdmin(data?.admin)) return;
     state.globalMessage = safeText(data?.message || '', 220);
-    saveState();
-    io.emit('admin:global', state.globalMessage);
+    saveState(); io.emit('admin:global', state.globalMessage);
   });
   socket.on('admin:global-clear', admin => {
     if (!isAdmin(admin)) return;
-    state.globalMessage = '';
-    saveState();
-    io.emit('admin:global-clear');
+    state.globalMessage = ''; saveState(); io.emit('admin:global-clear');
   });
-  socket.on('admin:restart', admin => {
-    if (!isAdmin(admin)) return;
-    io.emit('admin:restart');
-    // This broadcasts the restart animation. To actually restart the backend,
-    // run with nodemon or PM2 and restart from your terminal/process manager.
-  });
+  socket.on('admin:restart', admin => { if (isAdmin(admin)) io.emit('admin:restart'); });
   socket.on('admin:ban', data => {
     if (!isAdmin(data?.admin)) return;
     const username = safeText(data?.username, 60);
     if (username && username !== OWNER_USERNAME && !state.bannedUsers.includes(username)) state.bannedUsers.push(username);
-    saveState();
-    emitUsers();
+    saveState(); emitUsers();
     for (const [sid, u] of liveUsers.entries()) if (u.username === username) io.to(sid).emit('admin:banned');
   });
   socket.on('admin:unban', data => {
     if (!isAdmin(data?.admin)) return;
     const username = safeText(data?.username, 60);
     state.bannedUsers = state.bannedUsers.filter(u => u !== username);
-    saveState();
-    emitUsers();
+    saveState(); emitUsers();
     for (const [sid, u] of liveUsers.entries()) if (u.username === username) io.to(sid).emit('admin:unbanned');
   });
 
-
-  socket.on('community:get', () => emitCommunity(socket));
-
   socket.on('friend:request', data => {
-    const user = liveUsers.get(socket.id);
-    if (!user) return;
-    const toUsername = safeText(data?.toUsername, 60);
-    if (!toUsername || toUsername === user.username) return;
-    if (isBlockedEither(user.username, toUsername)) return;
-    if (isFriend(user.username, toUsername)) return;
-    const exists = (state.friendRequests || []).some(r => r.status === 'pending' && ((r.from === user.username && r.to === toUsername) || (r.from === toUsername && r.to === user.username)));
-    if (!exists) {
-      state.friendRequests.push({ from: user.username, to: toUsername, status: 'pending', time: Date.now() });
-      saveState();
-    }
-    const payload = { fromUsername: user.username, fromDisplay: user.displayName, toUsername, community: communityState() };
-    sendToUsername(toUsername, 'friend:request', payload);
-    sendToUsername(user.username, 'friend:update', payload);
-    emitCommunity();
+    const me = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
+    const to = safeText(data?.toUsername, 60);
+    if (!to || to === me.username || isBanned(me.username, me.owner)) return;
+    const exists = state.community.friendRequests.some(r => r.from === me.username && r.to === to && r.status === 'pending');
+    if (!exists) state.community.friendRequests.push({ from: me.username, to, fromDisplay: me.displayName, status: 'pending', time: Date.now() });
+    saveState(); emitCommunityState();
+    for (const [sid, u] of liveUsers.entries()) if (u.username === to) io.to(sid).emit('friend:request', { fromUsername: me.username, fromDisplay: me.displayName });
   });
 
   socket.on('friend:respond', data => {
-    const user = liveUsers.get(socket.id);
-    if (!user) return;
-    const fromUsername = safeText(data?.fromUsername, 60);
+    const me = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
+    const from = safeText(data?.fromUsername, 60);
     const accept = !!data?.accept;
-    const req = (state.friendRequests || []).find(r => r.from === fromUsername && r.to === user.username && r.status === 'pending');
-    if (!req) return;
-    req.status = accept ? 'accepted' : 'declined';
-    req.respondedAt = Date.now();
-    if (accept) addFriend(user.username, fromUsername);
-    saveState();
-    const payload = { fromUsername, toUsername: user.username, accept, community: communityState() };
-    sendToUsername(fromUsername, 'friend:update', payload);
-    sendToUsername(user.username, 'friend:update', payload);
-    emitCommunity();
+    state.community.friendRequests = state.community.friendRequests.filter(r => !(r.from === from && r.to === me.username && r.status === 'pending'));
+    if (accept) {
+      state.community.friendships[me.username] = state.community.friendships[me.username] || [];
+      state.community.friendships[from] = state.community.friendships[from] || [];
+      addUnique(state.community.friendships[me.username], from);
+      addUnique(state.community.friendships[from], me.username);
+    }
+    saveState(); emitCommunityState(); io.emit('friend:update', { community: state.community });
   });
 
   socket.on('friend:remove', data => {
-    const user = liveUsers.get(socket.id);
-    if (!user) return;
-    const username = safeText(data?.username, 60);
-    removeFriend(user.username, username);
-    saveState();
-    const payload = { username, community: communityState() };
-    sendToUsername(username, 'friend:update', payload);
-    sendToUsername(user.username, 'friend:update', payload);
-    emitCommunity();
+    const me = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
+    const other = safeText(data?.username, 60);
+    state.community.friendRequests = state.community.friendRequests.filter(r => !((r.from === me.username && r.to === other) || (r.from === other && r.to === me.username)));
+    state.community.friendships[me.username] = removeFrom(state.community.friendships[me.username], other);
+    state.community.friendships[other] = removeFrom(state.community.friendships[other], me.username);
+    saveState(); emitCommunityState(); io.emit('friend:update', { community: state.community });
   });
 
   socket.on('friend:block', data => {
-    const user = liveUsers.get(socket.id);
-    if (!user) return;
-    const username = safeText(data?.username, 60);
-    if (!username || username === OWNER_USERNAME) return;
-    state.blocks[user.username] = state.blocks[user.username] || [];
-    if (!state.blocks[user.username].includes(username)) state.blocks[user.username].push(username);
-    removeFriend(user.username, username);
-    saveState();
-    emitCommunity();
+    const me = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
+    const other = safeText(data?.username, 60);
+    state.community.blocks[me.username] = state.community.blocks[me.username] || [];
+    addUnique(state.community.blocks[me.username], other);
+    state.community.friendships[me.username] = removeFrom(state.community.friendships[me.username], other);
+    state.community.friendships[other] = removeFrom(state.community.friendships[other], me.username);
+    state.community.friendRequests = state.community.friendRequests.filter(r => !((r.from === me.username && r.to === other) || (r.from === other && r.to === me.username)));
+    saveState(); emitCommunityState(); io.emit('friend:update', { community: state.community });
   });
 
   socket.on('friend:unblock', data => {
-    const user = liveUsers.get(socket.id);
-    if (!user) return;
-    const username = safeText(data?.username, 60);
-    state.blocks[user.username] = (state.blocks[user.username] || []).filter(x => x !== username);
-    saveState();
-    emitCommunity();
+    const me = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
+    const other = safeText(data?.username, 60);
+    state.community.blocks[me.username] = removeFrom(state.community.blocks[me.username], other);
+    saveState(); emitCommunityState(); io.emit('friend:update', { community: state.community });
   });
 
   socket.on('dm:send', data => {
-    const user = liveUsers.get(socket.id);
-    if (!user) return;
-    const toUsername = safeText(data?.toUsername, 60);
-    const text = safeText(data?.text, 1000);
-    if (!toUsername || !text) return;
-    if (!isFriend(user.username, toUsername) || isBlockedEither(user.username, toUsername)) return;
-    const key = dmKey(user.username, toUsername);
-    state.directMessages[key] = state.directMessages[key] || [];
-    const msg = { id: Date.now(), from: user.username, fromDisplay: user.displayName, to: toUsername, text, time: Date.now() };
-    state.directMessages[key].push(msg);
-    state.directMessages[key] = state.directMessages[key].slice(-200);
-    saveState();
-    const payload = { ...msg, community: communityState() };
-    sendToUsername(user.username, 'dm:new', payload);
-    sendToUsername(toUsername, 'dm:new', payload);
+    const me = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
+    const to = safeText(data?.toUsername, 60);
+    const text = safeText(data?.text, 1200);
+    if (!to || !text) return;
+    if (!((state.community.friendships[me.username] || []).includes(to))) return;
+    const key = dmKey(me.username, to);
+    state.community.directMessages[key] = state.community.directMessages[key] || [];
+    state.community.directMessages[key].push({ from: me.username, to, fromDisplay: me.displayName, text, time: Date.now() });
+    state.community.directMessages[key] = state.community.directMessages[key].slice(-250);
+    saveState(); emitCommunityState(); io.emit('dm:new', { community: state.community, from: me.username, fromDisplay: me.displayName, to });
   });
 
   socket.on('community:story:new', data => {
-    const user = liveUsers.get(socket.id);
-    if (!user) return;
-    if (state.bannedUsers.includes(user.username) && !user.owner) return socket.emit('admin:banned');
-    const story = { id: Date.now(), username: user.username, displayName: user.displayName, initials: user.initials, avatarUrl: user.avatarUrl, verified: user.verified, title: safeText(data?.title, 120), text: safeText(data?.text, 5000), time: Date.now() };
+    const me = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
+    if (isBanned(me.username, me.owner)) return socket.emit('admin:banned');
+    const story = {
+      id: Date.now(),
+      username: me.username,
+      displayName: me.displayName,
+      initials: me.initials,
+      avatarUrl: me.avatarUrl,
+      verified: !!me.verified,
+      owner: !!me.owner,
+      title: safeText(data?.title, 120),
+      text: safeText(data?.text, 5000),
+      time: Date.now()
+    };
     if (!story.title || !story.text) return;
-    state.communityStories.unshift(story);
-    state.communityStories = state.communityStories.slice(0, 100);
-    saveState();
-    io.emit('community:story:new', { story, community: communityState() });
+    state.community.communityStories.unshift(story);
+    state.community.communityStories = state.community.communityStories.slice(0, 200);
+    saveState(); emitCommunityState(); io.emit('community:story:new', { community: state.community, story });
   });
 
   socket.on('report:user', data => {
-    const user = liveUsers.get(socket.id);
-    if (!user) return;
-    const report = { id: Date.now(), reporterUsername: user.username, reporterDisplay: user.displayName, reportedUsername: safeText(data?.reportedUsername, 60), why: safeText(data?.why, 1200), time: Date.now() };
+    const me = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
+    const report = {
+      id: Date.now(),
+      reporterUsername: me.username,
+      reporterDisplay: me.displayName,
+      reportedUsername: safeText(data?.reportedUsername, 60),
+      why: safeText(data?.why, 1200),
+      time: Date.now()
+    };
     if (!report.reportedUsername || !report.why) return;
-    state.reports.push(report);
-    saveState();
-    for (const [sid, u] of liveUsers.entries()) if (isAdmin(u)) io.to(sid).emit('admin:report', { ...report, reports: state.reports });
+    state.community.reports.push(report);
+    state.community.reports = state.community.reports.slice(-200);
+    saveState(); emitCommunityState();
+    for (const [sid, u] of liveUsers.entries()) if (u.owner) io.to(sid).emit('admin:report', { reports: state.community.reports, ...report });
   });
 
-  socket.on('admin:get-reports', admin => {
-    if (!isAdmin(admin)) return;
-    socket.emit('admin:report', { reports: state.reports });
-  });
-
-  socket.on('disconnect', () => {
-    liveUsers.delete(socket.id);
-    emitUsers();
-    emitCommunity();
-  });
+  socket.on('disconnect', () => { liveUsers.delete(socket.id); emitUsers(); });
 });
 
 server.listen(PORT, () => {

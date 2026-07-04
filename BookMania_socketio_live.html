@@ -2532,6 +2532,95 @@ const bmOldSwitchTabCommunity=switchTab;
 switchTab=function(tab){bmOldSwitchTabCommunity(tab); if(tab==='community')renderCommunityBM();};
 try{bmNotifications=JSON.parse(localStorage.getItem('bm_notifications')||'[]');}catch{bmNotifications=[];}
 
+
+
+// === PERSISTENCE + LOGOUT + NAME VALIDATION PATCH ===
+function bmHasEmojiTextBM(v){
+  try{return /\p{Extended_Pictographic}/u.test(String(v||''));}
+  catch(e){return /[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(String(v||''));}
+}
+function bmHasBadNameCharsBM(v){
+  const x=String(v||'');
+  return bmHasEmojiTextBM(x) || /[<>`{}[\]\\/|~^]/.test(x);
+}
+function bmValidateSignupNamesBM(fn,ln,un,er){
+  if(bmHasBadNameCharsBM(fn)||bmHasBadNameCharsBM(ln)||bmHasBadNameCharsBM(un)){
+    er.textContent='Names and usernames cannot use emojis or symbols.';er.style.display='block';return false;
+  }
+  if(!/^[A-Za-z0-9_. -]{1,40}$/.test(fn) || (ln && !/^[A-Za-z0-9_. -]{1,40}$/.test(ln)) || !/^[A-Za-z0-9_.-]{3,30}$/.test(un)){
+    er.textContent='Use normal letters/numbers only. Username needs 3-30 characters.';er.style.display='block';return false;
+  }
+  return true;
+}
+doSignup=function(){
+  const fn=document.getElementById('su-fname').value.trim();
+  const ln=document.getElementById('su-lname').value.trim();
+  const em=document.getElementById('su-email').value.trim();
+  const un=document.getElementById('su-uname').value.trim();
+  const pw=document.getElementById('su-pass').value;
+  const er=document.getElementById('su-err');er.style.display='none';
+  if(!fn||!em||!un||!pw){er.textContent='Please fill in all fields.';er.style.display='block';return;}
+  if(!bmValidateSignupNamesBM(fn,ln,un,er))return;
+  if(pw.length<8){er.textContent='Password must be at least 8 characters.';er.style.display='block';return;}
+  const us=getU();
+  if(us[un]){er.textContent='Username already taken.';er.style.display='block';return;}
+  us[un]={fn,ln,em,un,pw:hashP(pw),av:pendAv||null,lib:[],rent:[]};
+  saveU(us);loginUser(us[un]);
+};
+doLogout=function(){
+  localStorage.removeItem('bm_sess');CU=null;
+  closeProfile();
+  const app=document.getElementById('app');
+  const auth=document.getElementById('auth-screen');
+  if(app)app.style.display='none';
+  if(auth){auth.style.display='flex';auth.classList.add('show');}
+  const splash=document.getElementById('intro-splash');
+  if(splash)splash.style.display='none';
+};
+function bmLocalStoryIdsBM(){return new Set((pubStories||[]).map(s=>String(s.id)));}
+function bmServerStoryIdsBM(){return new Set((bmServerStories||[]).map(s=>String(s.id)));}
+function bmRestoreLocalStoriesToServerBM(){
+  if(!bmSocketReady || !Array.isArray(pubStories) || !pubStories.length)return;
+  const serverIds=bmServerStoryIdsBM();
+  const missing=pubStories.filter(s=>s && s.id && s.title && !serverIds.has(String(s.id))).slice(0,60);
+  missing.forEach(s=>bmSocket.emit('story:restore',s));
+}
+bmMergeServerStories=function(){
+  let changed=false;
+  const localIds=bmLocalStoryIdsBM();
+  (bmServerStories||[]).forEach(st=>{
+    if(st && st.id && !localIds.has(String(st.id))){pubStories.unshift(st);changed=true;}
+  });
+  if(changed)localStorage.setItem('bm_pub_stories',JSON.stringify(pubStories));
+  renderStories();
+  setTimeout(bmRestoreLocalStoriesToServerBM,700);
+};
+const bmOldPublishStorySavePatch=publishStory;
+publishStory=function(){
+  bmOldPublishStorySavePatch();
+  try{localStorage.setItem('bm_pub_stories',JSON.stringify(pubStories||[]));}catch(e){}
+};
+const bmOldRenderCommunityStoriesBM=renderCommunityStoriesBM;
+renderCommunityStoriesBM=function(){
+  const box=document.getElementById('communityStoriesBM'); if(!box)return;
+  const stories=(bmCommunity&&bmCommunity.communityStories)||[];
+  if(!stories.length){box.innerHTML='<div style="color:var(--muted);font-size:12px;padding:10px;">No community stories yet.</div>';return;}
+  box.innerHTML=stories.map(st=>{
+    const p={...bmProfileOf(st.username),verified:!!st.verified||!!st.owner||!!bmProfileOf(st.username).verified};
+    return `<div class="community-post"><div style="display:flex;align-items:center;gap:9px;">${communityAvatarBM(p,32)}<div><div class="community-name">${escBM(st.displayName||p.displayName||st.username)}${verifiedHTML({verified:!!p.verified})}</div><div class="community-sub">${new Date(st.time||Date.now()).toLocaleString()}</div></div></div><div class="community-post-title">${escBM(st.title)}</div><div class="community-post-text">${escBM(st.text)}</div></div>`;
+  }).join('');
+};
+const bmOldShareCommunityStoryBM=shareCommunityStoryBM;
+shareCommunityStoryBM=function(){
+  const title=document.getElementById('communityStoryTitleBM').value.trim();
+  const text=document.getElementById('communityStoryTextBM').value.trim();
+  if(!title||!text)return showToast('Add title and story');
+  if(!bmSocketReady)return showToast('Socket not connected');
+  bmSocket.emit('community:story:new',{title,text,user:bmCurrentUserPayload()});
+  document.getElementById('communityStoryTitleBM').value='';
+  document.getElementById('communityStoryTextBM').value='';
+};
+
 bmConnectSocket();
 
 
