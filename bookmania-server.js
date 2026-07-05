@@ -16,7 +16,7 @@ const OWNER_PASSWORD = process.env.BOOKMANIA_OWNER_PASSWORD || '020501';
 let state = {
   stories: [],
   comments: {},
-  bannedUsers: [],
+  bans: {},
   globalMessage: '',
   profiles: {},
   community: {
@@ -25,15 +25,56 @@ let state = {
     directMessages: {},
     blocks: {},
     reports: [],
-    communityStories: []
+    communityStories: [],
+    groups: [],
+    groupMessages: {}
   }
 };
 const liveUsers = new Map();
+const BAD_WORDS = ['fuck','shit','bitch','asshole','bastard','dick','pussy','cunt','whore','slut','dumbass','twat','wanker','bollocks'];
+function countBadWords(text) {
+  if (!text) return 0;
+  const lower = String(text).toLowerCase();
+  let count = 0;
+  for (const w of BAD_WORDS) {
+    const re = new RegExp('\\b' + w + '\\w*', 'g');
+    const m = lower.match(re);
+    if (m) count += m.length;
+  }
+  return count;
+}
+function moderateMessage(username, owner, text) {
+  if (owner || !username) return { action: null };
+  const hits = countBadWords(text);
+  if (!hits) return { action: null };
+  const profile = state.profiles[username] = state.profiles[username] || { username };
+  profile.badWordHits = (Number(profile.badWordHits) || 0) + hits;
+  let action = null;
+  if (profile.badWordHits >= 5 && !isBanned(username, false)) {
+    state.bans[username] = {
+      reason: 'Automated moderation: repeated use of inappropriate language',
+      until: Date.now() + 7 * 24 * 60 * 60 * 1000,
+      bannedAt: Date.now(),
+      by: 'AI Moderator'
+    };
+    action = 'banned';
+  } else if (profile.badWordHits >= 3 && !profile.warned) {
+    profile.warned = true;
+    action = 'warned';
+  }
+  return { action, hits: profile.badWordHits };
+}
 
 function normalizeState() {
   state.stories = Array.isArray(state.stories) ? state.stories : [];
   state.comments = state.comments && typeof state.comments === 'object' ? state.comments : {};
-  state.bannedUsers = Array.isArray(state.bannedUsers) ? state.bannedUsers : [];
+  state.bans = state.bans && typeof state.bans === 'object' ? state.bans : {};
+  if (Array.isArray(state.bannedUsers)) {
+    state.bannedUsers.forEach(u => {
+      if (u && !state.bans[u]) state.bans[u] = { reason: 'Legacy ban', until: null, bannedAt: Date.now(), by: OWNER_USERNAME };
+    });
+    delete state.bannedUsers;
+  }
   state.globalMessage = typeof state.globalMessage === 'string' ? state.globalMessage : '';
   state.profiles = state.profiles && typeof state.profiles === 'object' ? state.profiles : {};
   state.community = state.community && typeof state.community === 'object' ? state.community : {};
@@ -43,6 +84,8 @@ function normalizeState() {
   state.community.blocks = state.community.blocks && typeof state.community.blocks === 'object' ? state.community.blocks : {};
   state.community.reports = Array.isArray(state.community.reports) ? state.community.reports : [];
   state.community.communityStories = Array.isArray(state.community.communityStories) ? state.community.communityStories : [];
+  state.community.groups = Array.isArray(state.community.groups) ? state.community.groups : [];
+  state.community.groupMessages = state.community.groupMessages && typeof state.community.groupMessages === 'object' ? state.community.groupMessages : {};
 }
 function loadState() {
   try {
@@ -93,10 +136,15 @@ function isAdmin(user) {
   return user.owner === true || user.username === OWNER_USERNAME || user.displayName === OWNER_USERNAME;
 }
 function isBanned(username, owner) {
-  return state.bannedUsers.includes(username) && !owner;
+  if (owner) return false;
+  const b = state.bans[username];
+  if (!b) return false;
+  if (b.until && Date.now() > b.until) { delete state.bans[username]; return false; }
+  return true;
 }
+function banInfo(username) { return state.bans[username] || null; }
 function emitUsers() {
-  io.emit('admin:users', { users: publicUsers(), bannedUsers: state.bannedUsers });
+  io.emit('admin:users', { users: publicUsers(), bannedUsers: Object.keys(state.bans) });
   emitCommunityState();
 }
 function emitCommunityState(target = io) {
@@ -172,7 +220,7 @@ io.on('connection', socket => {
     saveProfile(normalized);
     saveState();
     socket.emit('state:init', { ...state, users: publicUsers() });
-    if (isBanned(normalized.username, normalized.owner)) socket.emit('admin:banned');
+    if (isBanned(normalized.username, normalized.owner)) socket.emit('admin:banned', banInfo(normalized.username));
     emitUsers();
   });
 
@@ -193,7 +241,7 @@ io.on('connection', socket => {
 
   socket.on('story:new', story => {
     const user = liveUsers.get(socket.id) || profileFromUser(story?.user, socket.id);
-    if (isBanned(user.username, user.owner)) return socket.emit('admin:banned');
+    if (isBanned(user.username, user.owner)) return socket.emit('admin:banned', banInfo(user.username));
     const clean = cleanStory(story, user, false);
     if (!storyExists(clean.id)) state.stories.unshift(clean);
     saveState();
@@ -202,7 +250,7 @@ io.on('connection', socket => {
 
   socket.on('story:restore', story => {
     const user = liveUsers.get(socket.id) || profileFromUser(story?.user, socket.id);
-    if (isBanned(user.username, user.owner)) return socket.emit('admin:banned');
+    if (isBanned(user.username, user.owner)) return socket.emit('admin:banned', banInfo(user.username));
     const clean = cleanStory(story, user, true);
     if (!storyExists(clean.id)) {
       state.stories.unshift(clean);
@@ -226,7 +274,7 @@ io.on('connection', socket => {
 
   socket.on('comment:new', data => {
     const user = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
-    if (isBanned(user.username, user.owner)) return socket.emit('admin:banned');
+    if (isBanned(user.username, user.owner)) return socket.emit('admin:banned', banInfo(user.username));
     const storyId = String(data?.storyId || '');
     if (!storyId) return;
     const comment = {
@@ -240,12 +288,15 @@ io.on('connection', socket => {
       time: Date.now()
     };
     if (!comment.text) return;
+    const mod = moderateMessage(user.username, user.owner, comment.text);
     state.comments[storyId] = state.comments[storyId] || [];
     state.comments[storyId].push(comment);
     const s = state.stories.find(x => String(x.id) === storyId);
     if (s) s.comments = state.comments[storyId].length;
     saveState();
     io.emit('comment:new', { storyId: data?.storyId, comments: state.comments[storyId] });
+    if (mod.action === 'warned') socket.emit('moderation:warning', { hits: mod.hits });
+    if (mod.action === 'banned') { emitUsers(); socket.emit('admin:banned', banInfo(user.username)); }
   });
 
   socket.on('admin:get-users', admin => { if (isAdmin(admin)) socket.emit('admin:users', { users: publicUsers(), bannedUsers: state.bannedUsers }); });
@@ -263,14 +314,19 @@ io.on('connection', socket => {
   socket.on('admin:ban', data => {
     if (!isAdmin(data?.admin)) return;
     const username = safeText(data?.username, 60);
-    if (username && username !== OWNER_USERNAME && !state.bannedUsers.includes(username)) state.bannedUsers.push(username);
+    if (!username || username === OWNER_USERNAME) return;
+    const reason = safeText(data?.reason || 'Violation of community guidelines', 300);
+    const permanent = !!data?.permanent;
+    const days = permanent ? null : Math.max(1, Number(data?.days) || 7);
+    const until = days ? Date.now() + days * 24 * 60 * 60 * 1000 : null;
+    state.bans[username] = { reason, until, bannedAt: Date.now(), by: data.admin.username || OWNER_USERNAME };
     saveState(); emitUsers();
-    for (const [sid, u] of liveUsers.entries()) if (u.username === username) io.to(sid).emit('admin:banned');
+    for (const [sid, u] of liveUsers.entries()) if (u.username === username) io.to(sid).emit('admin:banned', state.bans[username]);
   });
   socket.on('admin:unban', data => {
     if (!isAdmin(data?.admin)) return;
     const username = safeText(data?.username, 60);
-    state.bannedUsers = state.bannedUsers.filter(u => u !== username);
+    delete state.bans[username];
     saveState(); emitUsers();
     for (const [sid, u] of liveUsers.entries()) if (u.username === username) io.to(sid).emit('admin:unbanned');
   });
@@ -287,6 +343,50 @@ io.on('connection', socket => {
     setVerified(username, false);
     saveState(); emitUsers();
     for (const [sid, u] of liveUsers.entries()) if (u.username === username) io.to(sid).emit('admin:verify-update', { verified: false });
+  });
+
+  socket.on('group:create', data => {
+    const me = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
+    if (isBanned(me.username, me.owner)) return socket.emit('admin:banned', banInfo(me.username));
+    const name = safeText(data?.name || 'New Group', 60);
+    let members = Array.isArray(data?.members) ? data.members.map(m => safeText(m, 60)).filter(Boolean) : [];
+    members = Array.from(new Set([me.username, ...members]));
+    const friends = state.community.friendships[me.username] || [];
+    members = members.filter(m => m === me.username || friends.includes(m));
+    if (members.length < 3) return socket.emit('group:error', 'Pick at least 2 friends to start a group (3 people total).');
+    const group = { id: 'g' + Date.now(), name, members, createdBy: me.username, time: Date.now() };
+    state.community.groups.push(group);
+    state.community.groupMessages[group.id] = [];
+    saveState(); emitCommunityState();
+    members.forEach(m => { for (const [sid, u] of liveUsers.entries()) if (u.username === m) io.to(sid).emit('group:created', group); });
+  });
+
+  socket.on('group:message', data => {
+    const me = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
+    if (isBanned(me.username, me.owner)) return socket.emit('admin:banned', banInfo(me.username));
+    const groupId = safeText(data?.groupId, 60);
+    const text = safeText(data?.text, 1200);
+    const group = state.community.groups.find(g => g.id === groupId);
+    if (!group || !group.members.includes(me.username) || !text) return;
+    const mod = moderateMessage(me.username, me.owner, text);
+    const msg = { from: me.username, fromDisplay: me.displayName, text, time: Date.now() };
+    state.community.groupMessages[groupId] = state.community.groupMessages[groupId] || [];
+    state.community.groupMessages[groupId].push(msg);
+    state.community.groupMessages[groupId] = state.community.groupMessages[groupId].slice(-250);
+    saveState(); emitCommunityState();
+    group.members.forEach(m => { for (const [sid, u] of liveUsers.entries()) if (u.username === m) io.to(sid).emit('group:message', { groupId, msg }); });
+    if (mod.action === 'warned') socket.emit('moderation:warning', { hits: mod.hits });
+    if (mod.action === 'banned') { emitUsers(); socket.emit('admin:banned', banInfo(me.username)); }
+  });
+
+  socket.on('group:leave', data => {
+    const me = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
+    const groupId = safeText(data?.groupId, 60);
+    const group = state.community.groups.find(g => g.id === groupId);
+    if (!group) return;
+    group.members = group.members.filter(m => m !== me.username);
+    if (group.members.length < 2) { state.community.groups = state.community.groups.filter(g => g.id !== groupId); delete state.community.groupMessages[groupId]; }
+    saveState(); emitCommunityState();
   });
 
   socket.on('friend:request', data => {
@@ -342,22 +442,26 @@ io.on('connection', socket => {
 
   socket.on('dm:send', data => {
     const me = liveUsers.get(socket.id) || profileFromUser(data?.user, socket.id);
+    if (isBanned(me.username, me.owner)) return socket.emit('admin:banned', banInfo(me.username));
     const to = safeText(data?.toUsername, 60);
     const text = safeText(data?.text, 1200);
     if (!to || !text) return;
     if (!((state.community.friendships[me.username] || []).includes(to))) return;
+    const mod = moderateMessage(me.username, me.owner, text);
     const key = dmKey(me.username, to);
     state.community.directMessages[key] = state.community.directMessages[key] || [];
     state.community.directMessages[key].push({ from: me.username, to, fromDisplay: me.displayName, text, time: Date.now() });
     state.community.directMessages[key] = state.community.directMessages[key].slice(-250);
     saveState(); emitCommunityState(); io.emit('dm:new', { community: state.community, from: me.username, fromDisplay: me.displayName, to });
+    if (mod.action === 'warned') socket.emit('moderation:warning', { hits: mod.hits });
+    if (mod.action === 'banned') { emitUsers(); socket.emit('admin:banned', banInfo(me.username)); }
   });
 
   socket.on('community:story:new', data => {
     const sent = profileFromUser(data?.user, socket.id);
     const live = liveUsers.get(socket.id);
     const me = (sent.owner || sent.verified || sent.username === OWNER_USERNAME) ? sent : (live || sent);
-    if (isBanned(me.username, me.owner)) return socket.emit('admin:banned');
+    if (isBanned(me.username, me.owner)) return socket.emit('admin:banned', banInfo(me.username));
     const owner = !!me.owner || me.username === OWNER_USERNAME || me.displayName === OWNER_USERNAME || !!data?.owner;
     const verified = owner || !!me.verified || !!data?.verified;
     const story = {
@@ -402,3 +506,16 @@ server.listen(PORT, () => {
   console.log(`BookMania live server running: http://localhost:${PORT}`);
   console.log('Owner password is read from BOOKMANIA_OWNER_PASSWORD env if set.');
 });
+
+setInterval(() => {
+  const now = Date.now();
+  let changed = false;
+  for (const [uname, b] of Object.entries(state.bans)) {
+    if (b.until && now > b.until) {
+      delete state.bans[uname];
+      changed = true;
+      for (const [sid, u] of liveUsers.entries()) if (u.username === uname) io.to(sid).emit('admin:unbanned');
+    }
+  }
+  if (changed) { saveState(); emitUsers(); }
+}, 30000);

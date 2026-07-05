@@ -545,6 +545,36 @@ input,textarea,select{font-family:var(--fn);}
 .report-modal{max-width:460px;}
 @media(max-width:900px){.community-grid{grid-template-columns:1fr}.chat-box{height:320px}}
 
+/* Error 444 ban screen */
+.banned-card.err444{background:linear-gradient(180deg,#1a0f0f,#0d0808);border:1px solid rgba(242,107,107,.4);border-radius:14px;padding:36px 32px;max-width:460px;box-shadow:0 0 60px rgba(242,107,107,.12);}
+.err-code{font-family:var(--fm);font-size:13px;letter-spacing:3px;color:var(--red);opacity:.85;margin-bottom:6px;}
+.banned-card.err444 h2{font-family:var(--fs);font-size:30px;color:var(--red);margin-bottom:18px;}
+.err-row{display:flex;justify-content:space-between;gap:14px;border-top:1px solid rgba(242,107,107,.15);padding:9px 0;font-size:12.5px;}
+.err-lbl{color:var(--muted);font-weight:700;}
+.err-val{color:var(--cream);text-align:right;max-width:65%;}
+.err-countdown{margin-top:16px;padding:12px;background:rgba(242,107,107,.08);border:1px solid rgba(242,107,107,.25);border-radius:10px;text-align:center;font-family:var(--fm);font-size:14px;color:var(--red);letter-spacing:.5px;}
+
+/* News sticky note */
+#newsModalBM{align-items:center;justify-content:center;}
+.sticky-note{position:relative;width:340px;max-width:88vw;background:#f2e29b;color:#3a3323;border-radius:3px;padding:30px 24px 26px;transform:rotate(-1.2deg);box-shadow:0 14px 30px rgba(0,0,0,.45),0 2px 0 rgba(0,0,0,.1) inset;font-family:'Courier Prime',monospace;animation:bmPop .25s ease both;}
+.sticky-pin{position:absolute;top:-11px;left:50%;transform:translateX(-50%);width:20px;height:20px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ff8a8a,#b23b3b);box-shadow:0 3px 5px rgba(0,0,0,.4);}
+.sticky-title{font-weight:700;font-size:16px;margin-bottom:12px;text-align:center;letter-spacing:.5px;}
+.sticky-body{font-size:12.5px;line-height:1.75;max-height:50vh;overflow:auto;}
+.sticky-body b{display:block;margin-top:12px;font-size:13px;}
+.sticky-body ul{margin:5px 0 0 16px;padding:0;}
+.sticky-close{position:absolute;top:6px;right:10px;background:none;border:none;font-size:20px;color:#3a3323;opacity:.55;line-height:1;}
+.sticky-close:hover{opacity:1;}
+
+/* Group chat */
+.group-row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px;transition:transform .18s ease,border-color .18s ease;cursor:pointer;animation:bmFadeUp .25s ease both;}
+.group-row:hover{transform:translateY(-2px);border-color:rgba(233,168,76,.35);}
+.group-icon{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--purple),#6a4fd6);display:flex;align-items:center;justify-content:center;font-size:15px;flex:none;}
+.group-picker-row{display:flex;align-items:center;gap:9px;padding:8px;border-radius:9px;transition:background .15s ease;}
+.group-picker-row:hover{background:var(--card);}
+.group-picker-row input{accent-color:var(--amber);width:15px;height:15px;}
+.mod-warning-banner{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:22000;background:linear-gradient(135deg,#3a1f1f,#2a1414);border:1px solid rgba(242,107,107,.4);color:var(--cream);padding:12px 18px;border-radius:12px;font-size:12.5px;max-width:360px;text-align:center;box-shadow:0 10px 26px rgba(0,0,0,.4);display:none;animation:bmPop .25s ease both;}
+.mod-warning-banner.show{display:block;}
+
 </style>
 </head>
 <body>
@@ -666,6 +696,9 @@ input,textarea,select{font-family:var(--fn);}
   </button>
   <button class="ntab" onclick="switchTab('community')" data-tab="community">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Community
+  </button>
+  <button class="ntab" onclick="openNewsBM()">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1 1-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>News
   </button>
 
 </nav>
@@ -883,6 +916,8 @@ input,textarea,select{font-family:var(--fn);}
       <h3>People <span id="commPeopleCount" style="font-size:10px;color:var(--muted);"></span></h3>
       <input class="finput" id="communitySearchBM" placeholder="Search people..." oninput="renderCommunityBM()" style="margin-bottom:10px;">
       <div class="community-list" id="communityPeopleBM"></div>
+      <h3 style="margin-top:16px;">Groups <button class="mini-btn" onclick="openGroupCreateBM()">+ New Group</button></h3>
+      <div class="community-list" id="communityGroupsBM" style="max-height:200px;"></div>
     </div>
     <div class="community-card chat-card">
       <h3 id="chatTitleBM" style="display:none;">Friend Chat</h3>
@@ -993,7 +1028,57 @@ input,textarea,select{font-family:var(--fn);}
 <div class="live-status"><span class="live-dot" id="liveDotBM"></span><span id="liveStatusBM">Socket offline</span></div>
 <div class="global-msg" id="globalMsgBM"></div>
 <div class="restart-screen" id="restartScreenBM"><div class="restart-core"><div class="restart-ring"></div><div class="restart-title">BookMania Restarting</div><div class="restart-sub" id="restartSubBM">Server signal received...</div></div></div>
-<div class="banned-screen" id="bannedScreenBM"><div class="banned-card"><h2>Access paused</h2><p>Your account has been banned by the BookMania owner. Ask the owner to unban you.</p></div></div>
+<div class="mod-warning-banner" id="modWarningBM"></div>
+<div class="banned-screen" id="bannedScreenBM">
+  <div class="banned-card err444">
+    <div class="err-code">ERROR 444</div>
+    <h2>You Were Banned</h2>
+    <div class="err-row"><span class="err-lbl">Reason</span><span class="err-val" id="banReasonViewBM">Violation of community guidelines</span></div>
+    <div class="err-row"><span class="err-lbl">Banned by</span><span class="err-val" id="banByViewBM">BookMania</span></div>
+    <div class="err-row"><span class="err-lbl">Duration</span><span class="err-val" id="banDurationViewBM">Permanent</span></div>
+    <div class="err-countdown" id="banCountdownBM"></div>
+    <p style="margin-top:14px;">If you think this is a mistake, contact the BookMania owner.</p>
+  </div>
+</div>
+
+<div class="moverlay" id="newsModalBM">
+  <div class="sticky-note">
+    <button class="sticky-close" onclick="closeNewsBM()">×</button>
+    <div class="sticky-pin"></div>
+    <div class="sticky-title">📌 What's New</div>
+    <div class="sticky-body" id="newsBodyBM"></div>
+  </div>
+</div>
+
+<div class="moverlay" id="groupCreateModalBM">
+  <div class="modal" style="max-width:420px;">
+    <div class="mclose-row"><button class="mclose" onclick="closeGroupCreateBM()">×</button></div>
+    <div class="mbody">
+      <div class="cp-title">New Group Chat</div>
+      <div class="cp-sub">Pick at least 2 friends — groups need 3 people or more.</div>
+      <input class="finput" id="groupNameBM" placeholder="Group name" style="margin-bottom:10px;">
+      <div class="community-list" id="groupFriendPickerBM" style="max-height:220px;"></div>
+      <button class="btn-primary" onclick="confirmGroupCreateBM()" style="width:100%;margin-top:12px;">Create Group</button>
+    </div>
+  </div>
+</div>
+
+<div class="moverlay" id="banModalBM">
+  <div class="modal" style="max-width:420px;">
+    <div class="mclose-row"><button class="mclose" onclick="closeBanModalBM()">×</button></div>
+    <div class="mbody">
+      <div class="cp-title">Ban <span id="banModalUserBM" style="color:var(--red);"></span></div>
+      <div class="cp-sub">This will be shown to the user as their ban reason.</div>
+      <textarea class="ftextarea" id="banReasonBM" placeholder="Reason for ban..." style="min-height:80px;margin-bottom:10px;"></textarea>
+      <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:5px;">Duration (days)</label>
+      <input class="finput" id="banDaysBM" type="number" min="1" value="7" style="margin-bottom:10px;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);margin-bottom:14px;">
+        <input type="checkbox" id="banPermanentBM" onchange="document.getElementById('banDaysBM').disabled=this.checked">Permanent ban
+      </label>
+      <button class="btn-primary" style="width:100%;background:var(--red);border-color:var(--red);" onclick="confirmBanBM()">Ban User</button>
+    </div>
+  </div>
+</div>
 
 <div class="moverlay" id="adminPanelBM">
   <div class="modal admin-modal">
@@ -2266,8 +2351,21 @@ function bmConnectSocket(){
     bmSocket.on('admin:global',msg=>showGlobalBM(msg));
     bmSocket.on('admin:global-clear',()=>hideGlobalBM());
     bmSocket.on('admin:restart',()=>showRestartBM());
-    bmSocket.on('admin:banned',()=>checkBanBM(true));
-    bmSocket.on('admin:unbanned',()=>checkBanBM(false));
+    bmSocket.on('admin:banned',(data)=>checkBanBM(true,data));
+    bmSocket.on('admin:unbanned',()=>{bmBanInfo=null; checkBanBM(false);});
+    bmSocket.on('group:created',group=>{bmCommunity.groups=bmCommunity.groups||[]; if(!bmCommunity.groups.some(g=>g.id===group.id))bmCommunity.groups.push(group); renderCommunityGroupsBM(); showToast('Added to group: '+group.name);});
+    bmSocket.on('group:message',data=>{
+      bmCommunity.groupMessages=bmCommunity.groupMessages||{};
+      bmCommunity.groupMessages[data.groupId]=bmCommunity.groupMessages[data.groupId]||[];
+      if(!bmCommunity.groupMessages[data.groupId].some(m=>m.time===data.msg.time&&m.from===data.msg.from))bmCommunity.groupMessages[data.groupId].push(data.msg);
+      if(data.msg.from!==bmMe() && bmActiveGroupId!==data.groupId){const g=(bmCommunity.groups||[]).find(x=>x.id===data.groupId); bmAddNotification({type:'group',title:'New group message',text:(data.msg.fromDisplay||data.msg.from)+' in '+(g?g.name:'a group')});}
+      if(bmActiveGroupId===data.groupId)renderActiveChatBM();
+    });
+    bmSocket.on('group:error',msg=>showToast(msg));
+    bmSocket.on('moderation:warning',data=>{
+      const el=document.getElementById('modWarningBM');
+      if(el){el.textContent='⚠️ Warning: inappropriate language detected ('+data.hits+'/5). Two more strikes and you will be banned for 7 days.'; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),6000);}
+    });
     bmSocket.on('admin:verify-update',data=>{
       if(!CU)return;
       const verified=!!data?.verified;
@@ -2292,11 +2390,37 @@ function bmMergeServerStories(){
   (bmServerStories||[]).forEach(st=>{if(!pubStories.find(s=>String(s.id)===String(st.id))){pubStories.unshift(st);changed=true;}});
   if(changed){localStorage.setItem('bm_pub_stories',JSON.stringify(pubStories));renderStories();}
 }
-function checkBanBM(force){
+function checkBanBM(force,banData){
   const user=bmCurrentUserPayload().username;
   const banned = force===true || bmBannedUsers.includes(user);
   const screen=document.getElementById('bannedScreenBM');
-  if(screen) screen.classList.toggle('show',!!banned && !isOwnerUser(CU));
+  const show=!!banned && !isOwnerUser(CU);
+  if(screen) screen.classList.toggle('show',show);
+  if(bmBanCountdownTimer){clearInterval(bmBanCountdownTimer); bmBanCountdownTimer=null;}
+  if(!show)return;
+  if(banData)bmBanInfo=banData;
+  const reasonEl=document.getElementById('banReasonViewBM'), byEl=document.getElementById('banByViewBM'), durEl=document.getElementById('banDurationViewBM'), cdEl=document.getElementById('banCountdownBM');
+  const info=bmBanInfo||{};
+  if(reasonEl)reasonEl.textContent=info.reason||'Violation of community guidelines';
+  if(byEl)byEl.textContent=info.by||'BookMania';
+  if(!info.until){
+    if(durEl)durEl.textContent='Permanent';
+    if(cdEl)cdEl.textContent='This is a permanent ban.';
+    return;
+  }
+  if(durEl)durEl.textContent=new Date(info.until).toLocaleString();
+  const tick=()=>{
+    const ms=info.until-Date.now();
+    if(ms<=0){
+      clearInterval(bmBanCountdownTimer); bmBanCountdownTimer=null;
+      if(cdEl)cdEl.textContent='Ban period ended — reconnecting...';
+      setTimeout(()=>{bmBannedUsers=bmBannedUsers.filter(u=>u!==user); if(screen)screen.classList.remove('show'); if(bmSocketReady)bmSocket.emit('user:hello',bmCurrentUserPayload());},1200);
+      return;
+    }
+    const d=Math.floor(ms/86400000), h=Math.floor(ms%86400000/3600000), m=Math.floor(ms%3600000/60000), s=Math.floor(ms%60000/1000);
+    if(cdEl)cdEl.textContent='Unbanned in '+d+'d '+h+'h '+m+'m '+s+'s';
+  };
+  tick(); bmBanCountdownTimer=setInterval(tick,1000);
 }
 function showGlobalBM(msg){const el=document.getElementById('globalMsgBM'); if(el){el.textContent=msg; el.classList.add('show');}}
 function hideGlobalBM(){const el=document.getElementById('globalMsgBM'); if(el){el.textContent=''; el.classList.remove('show');}}
@@ -2322,7 +2446,30 @@ function bmRenderAdminUsers(){
 function adminRestartBM(){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('admin:restart',bmCurrentUserPayload());}
 function adminSendGlobalBM(){const msg=document.getElementById('adminGlobalTextBM').value.trim(); if(!msg)return showToast('Write a message'); bmSocket.emit('admin:global',{admin:bmCurrentUserPayload(),message:msg});}
 function adminClearGlobalBM(){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('admin:global-clear',bmCurrentUserPayload());}
-function adminBanBM(username,ban){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit(ban?'admin:ban':'admin:unban',{admin:bmCurrentUserPayload(),username});}
+function adminBanBM(username,ban){
+  if(!bmSocketReady)return showToast('Socket not connected');
+  if(!ban){ bmSocket.emit('admin:unban',{admin:bmCurrentUserPayload(),username}); return; }
+  openBanModalBM(username);
+}
+function openBanModalBM(username){
+  bmBanModalTarget=username;
+  document.getElementById('banModalUserBM').textContent='@'+username;
+  document.getElementById('banReasonBM').value='';
+  document.getElementById('banDaysBM').value='7'; document.getElementById('banDaysBM').disabled=false;
+  document.getElementById('banPermanentBM').checked=false;
+  document.getElementById('banModalBM').classList.add('open');
+}
+function closeBanModalBM(){document.getElementById('banModalBM').classList.remove('open'); bmBanModalTarget=null;}
+function confirmBanBM(){
+  if(!bmBanModalTarget)return;
+  const reason=document.getElementById('banReasonBM').value.trim()||'Violation of community guidelines';
+  const permanent=document.getElementById('banPermanentBM').checked;
+  const days=Math.max(1,Number(document.getElementById('banDaysBM').value)||7);
+  if(!bmSocketReady)return showToast('Socket not connected');
+  bmSocket.emit('admin:ban',{admin:bmCurrentUserPayload(),username:bmBanModalTarget,reason,permanent,days});
+  showToast('Banned @'+bmBanModalTarget);
+  closeBanModalBM();
+}
 function adminVerifyBM(username,verify){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit(verify?'admin:verify':'admin:unverify',{admin:bmCurrentUserPayload(),username}); showToast(verify?'Verified @'+username:'Removed verification from @'+username);}
 function adminRunCommandBM(){
   const raw=document.getElementById('adminCommandBM').value.trim();
@@ -2482,6 +2629,7 @@ changeProfilePic=function(inp){
 
 // === COMMUNITY SOCKET.IO PATCH ===
 let bmAllProfiles={}, bmCommunity={}, bmNotifications=[], bmActiveChatUser=null, bmReportTarget=null;
+let bmActiveGroupId=null, bmBanModalTarget=null, bmBanInfo=null, bmBanCountdownTimer=null;
 function bmMe(){return bmCurrentUserPayload().username;}
 function bmProfileOf(username){return bmAllProfiles[username] || (bmConnectedUsers||[]).find(u=>u.username===username) || {username,displayName:username,initials:String(username||'??').slice(0,2).toUpperCase(),avatarUrl:''};}
 function bmIsOnline(username){return (bmConnectedUsers||[]).some(u=>u.username===username);}
@@ -2517,20 +2665,67 @@ function renderCommunityBM(){
     else actions=`<button class="mini-btn" onclick="friendRequestBM('${escBM(username)}')">Add Friend</button><button class="mini-btn danger" onclick="blockUserBM('${escBM(username)}')">Block</button><button class="mini-btn danger" onclick="openReportBM('${escBM(username)}')">Report</button>`;
     return `<div class="community-user">${communityAvatarBM(p,38)}<div class="community-user-info"><div class="community-name">${escBM(p.displayName||username)}${p.verified?verifiedHTML({verified:true}):''}</div><div class="community-sub"><span class="online-dot ${online?'on':''}"></span>${online?'Online':'Offline'} · @${escBM(username)}</div><div class="community-actions">${actions}</div></div></div>`;
   }).join('');
-  renderCommunityStoriesBM(); renderActiveChatBM(); bmRenderNotificationsBM();
+  renderCommunityStoriesBM(); renderCommunityGroupsBM(); renderActiveChatBM(); bmRenderNotificationsBM();
 }
 function friendRequestBM(username){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('friend:request',{toUsername:username,user:bmCurrentUserPayload()});}
 function friendRespondBM(fromUsername,accept){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('friend:respond',{fromUsername,accept,user:bmCurrentUserPayload()});}
 function friendRemoveBM(username){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('friend:remove',{username,user:bmCurrentUserPayload()}); if(bmActiveChatUser===username)bmActiveChatUser=null;}
 function blockUserBM(username){if(!bmSocketReady)return showToast('Socket not connected'); if(!confirm('Block '+username+'?'))return; bmSocket.emit('friend:block',{username,user:bmCurrentUserPayload()}); if(bmActiveChatUser===username)bmActiveChatUser=null;}
 function unblockUserBM(username){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('friend:unblock',{username,user:bmCurrentUserPayload()});}
-function openChatBM(username){bmActiveChatUser=username; renderActiveChatBM();}
+function openChatBM(username){bmActiveChatUser=username; bmActiveGroupId=null; renderActiveChatBM();}
+function openGroupChatBM(groupId){bmActiveGroupId=groupId; bmActiveChatUser=null; renderActiveChatBM();}
 function dmKeyBM(a,b){return [a,b].sort().join('::');}
+function bmMyGroups(){return (bmCommunity.groups||[]).filter(g=>(g.members||[]).includes(bmMe()));}
+function renderCommunityGroupsBM(){
+  const box=document.getElementById('communityGroupsBM'); if(!box)return;
+  const groups=bmMyGroups();
+  if(!groups.length){box.innerHTML='<div style="color:var(--muted);font-size:11px;padding:10px;">No groups yet. Create one with 2+ friends.</div>';return;}
+  box.innerHTML=groups.map(g=>`<div class="group-row" onclick="openGroupChatBM('${escBM(g.id)}')"><div class="group-icon">👥</div><div class="community-user-info"><div class="community-name">${escBM(g.name)}</div><div class="community-sub">${g.members.length} members</div></div></div>`).join('');
+}
+function openGroupCreateBM(){
+  const friends=bmCommunity.friendships?.[bmMe()]||[];
+  const box=document.getElementById('groupFriendPickerBM');
+  if(!friends.length){box.innerHTML='<div style="color:var(--muted);font-size:12px;padding:10px;">Add some friends first before starting a group.</div>';}
+  else box.innerHTML=friends.map(u=>{const p=bmProfileOf(u); return `<label class="group-picker-row"><input type="checkbox" value="${escBM(u)}">${communityAvatarBM(p,26)}<span class="community-name">${escBM(p.displayName||u)}</span></label>`;}).join('');
+  document.getElementById('groupNameBM').value='';
+  document.getElementById('groupCreateModalBM').classList.add('open');
+}
+function closeGroupCreateBM(){document.getElementById('groupCreateModalBM').classList.remove('open');}
+function confirmGroupCreateBM(){
+  const name=document.getElementById('groupNameBM').value.trim()||'New Group';
+  const members=Array.from(document.querySelectorAll('#groupFriendPickerBM input:checked')).map(i=>i.value);
+  if(members.length<2)return showToast('Pick at least 2 friends (3 people total)');
+  if(!bmSocketReady)return showToast('Socket not connected');
+  bmSocket.emit('group:create',{name,members,user:bmCurrentUserPayload()});
+  closeGroupCreateBM();
+}
 function renderActiveChatBM(){
   const box=document.getElementById('chatBoxBM');
   const headerEmpty=document.getElementById('chatHeaderEmptyBM'), headerActive=document.getElementById('chatHeaderActiveBM');
   const headerAv=document.getElementById('chatHeaderAvBM'), headerName=document.getElementById('chatHeaderNameBM'), headerStatus=document.getElementById('chatHeaderStatusBM');
   if(!box)return;
+  if(bmActiveGroupId){
+    const group=(bmCommunity.groups||[]).find(g=>g.id===bmActiveGroupId);
+    if(!group){bmActiveGroupId=null; return renderActiveChatBM();}
+    if(headerEmpty)headerEmpty.style.display='none';
+    if(headerActive)headerActive.style.display='flex';
+    if(headerAv)headerAv.innerHTML='<div class="group-icon" style="width:34px;height:34px;">👥</div>';
+    if(headerName)headerName.textContent=group.name;
+    if(headerStatus){headerStatus.textContent=group.members.length+' members'; headerStatus.classList.remove('on');}
+    const list=(bmCommunity.groupMessages&&bmCommunity.groupMessages[bmActiveGroupId])||[];
+    if(!list.length){box.innerHTML='<div class="chat-empty">No messages yet. Say hi to the group.</div>';return;}
+    let lastFrom=null;
+    box.innerHTML=list.map(m=>{
+      const mine=m.from===bmMe();
+      const grouped=lastFrom===m.from; lastFrom=m.from;
+      const mp=mine?null:bmProfileOf(m.from);
+      const avHTML=mine?'':`<div class="chat-av">${grouped?'':communityAvatarBM(mp,24)}</div>`;
+      const time=new Date(m.time||Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      return `<div class="chat-row ${mine?'me':''} ${grouped?'grouped':''}">${avHTML}<div class="chat-msg">${grouped?'':`<div class="chat-meta">${escBM(m.fromDisplay||m.from)}</div>`}${escBM(m.text)}<div class="chat-time">${time}</div></div></div>`;
+    }).join('');
+    box.scrollTop=box.scrollHeight;
+    return;
+  }
   if(!bmActiveChatUser){
     box.innerHTML='<div class="chat-empty">Select a friend to start chatting.</div>';
     if(headerEmpty)headerEmpty.style.display='block'; if(headerActive)headerActive.style.display='none';
@@ -2557,7 +2752,11 @@ function renderActiveChatBM(){
 }
 function sendDirectMessageBM(){
   const inp=document.getElementById('chatInputBM'); const text=(inp?.value||'').trim();
-  if(!bmActiveChatUser)return showToast('Select a friend'); if(!text)return; if(!bmSocketReady)return showToast('Socket not connected');
+  if(!text)return; if(!bmSocketReady)return showToast('Socket not connected');
+  if(bmActiveGroupId){
+    bmSocket.emit('group:message',{groupId:bmActiveGroupId,text,user:bmCurrentUserPayload()}); inp.value=''; return;
+  }
+  if(!bmActiveChatUser)return showToast('Select a friend');
   bmSocket.emit('dm:send',{toUsername:bmActiveChatUser,text,user:bmCurrentUserPayload()}); inp.value='';
 }
 function shareCommunityStoryBM(){
@@ -2572,6 +2771,26 @@ function renderCommunityStoriesBM(){
   if(!stories.length){box.innerHTML='<div style="color:var(--muted);font-size:12px;padding:10px;">No community stories yet.</div>';return;}
   box.innerHTML=stories.map(st=>{const p=bmProfileOf(st.username); return `<div class="community-post"><div style="display:flex;align-items:center;gap:9px;">${communityAvatarBM(p,32)}<div><div class="community-name">${escBM(st.displayName||st.username)}</div><div class="community-sub">${new Date(st.time||Date.now()).toLocaleString()}</div></div></div><div class="community-post-title">${escBM(st.title)}</div><div class="community-post-text">${escBM(st.text)}</div></div>`;}).join('');
 }
+const BM_NEWS_LOG=`
+<b>🎉 Latest update</b>
+<ul>
+<li>Group chats — start a conversation with 3+ friends at once</li>
+<li>News board (you're reading it!) — a sticky note with what's new</li>
+<li>AI language moderation — repeated bad language now gets an automatic warning, then a 7-day ban</li>
+<li>Admin bans now ask for a reason and a duration (or permanent), and show a proper ban screen with a countdown</li>
+</ul>
+<b>✓ Earlier update</b>
+<ul>
+<li>Verified tick marks — admins can verify any user, live over Socket.IO</li>
+<li>Smoother Community &amp; Chat UI — avatars, grouped bubbles, timestamps, hover animations</li>
+</ul>
+<b>💬 Earlier update</b>
+<ul>
+<li>Friends, DMs, community stories, reports and live admin tools, all powered by Socket.IO</li>
+</ul>
+`;
+function openNewsBM(){document.getElementById('newsBodyBM').innerHTML=BM_NEWS_LOG; document.getElementById('newsModalBM').classList.add('open');}
+function closeNewsBM(){document.getElementById('newsModalBM').classList.remove('open');}
 function openNotificationsBM(){document.getElementById('notificationsModalBM').classList.add('open'); bmRenderNotificationsBM();}
 function closeNotificationsBM(){document.getElementById('notificationsModalBM').classList.remove('open');}
 function bmAddNotification(n){
