@@ -574,6 +574,39 @@ input,textarea,select{font-family:var(--fn);}
 .group-picker-row input{accent-color:var(--amber);width:15px;height:15px;}
 .mod-warning-banner{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:22000;background:linear-gradient(135deg,#3a1f1f,#2a1414);border:1px solid rgba(242,107,107,.4);color:var(--cream);padding:12px 18px;border-radius:12px;font-size:12.5px;max-width:360px;text-align:center;box-shadow:0 10px 26px rgba(0,0,0,.4);display:none;animation:bmPop .25s ease both;}
 .mod-warning-banner.show{display:block;}
+.mod-warning-banner.muted{border-color:rgba(233,168,76,.4);background:linear-gradient(135deg,#3a2c14,#241a0c);}
+
+/* Typing indicator */
+.typing-indicator{display:none;align-items:center;gap:6px;padding:4px 16px 8px;font-size:11px;color:var(--muted);font-style:italic;}
+.typing-indicator.show{display:flex;}
+.typing-dots{display:flex;gap:3px;}
+.typing-dots span{width:5px;height:5px;border-radius:50%;background:var(--muted);animation:bmTypingBounce 1.2s infinite ease-in-out;}
+.typing-dots span:nth-child(2){animation-delay:.15s;}
+.typing-dots span:nth-child(3){animation-delay:.3s;}
+@keyframes bmTypingBounce{0%,60%,100%{transform:translateY(0);opacity:.4;}30%{transform:translateY(-3px);opacity:1;}}
+
+/* Seen ticks */
+.chat-seen{font-size:9px;color:var(--muted);margin-left:4px;}
+.chat-seen.seen{color:var(--green);}
+
+/* Unread badge */
+.unread-badge{background:var(--red);color:#fff;font-size:9px;font-weight:800;border-radius:20px;padding:2px 6px;min-width:16px;text-align:center;line-height:1.4;flex:none;}
+
+/* Reactions */
+.reaction-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
+.reaction-btn{background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:16px;padding:4px 10px;font-size:12px;display:flex;align-items:center;gap:5px;transition:transform .15s ease,border-color .15s ease;}
+.reaction-btn:hover{transform:translateY(-1px);border-color:rgba(233,168,76,.35);}
+.reaction-btn.mine{border-color:var(--amber);background:rgba(233,168,76,.12);color:var(--amber);}
+.reaction-count{font-size:10px;font-weight:700;}
+
+/* Online stat */
+.online-stat{font-size:11px;color:var(--green);display:flex;align-items:center;gap:5px;}
+.online-stat .online-dot{margin:0;}
+
+/* Group header extras */
+.chat-header-extra{margin-left:auto;display:flex;gap:6px;}
+.chat-header-extra button{background:var(--card);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:6px 9px;font-size:10px;font-weight:700;transition:border-color .15s ease,color .15s ease;}
+.chat-header-extra button:hover{border-color:var(--red);color:var(--red);}
 
 </style>
 </head>
@@ -910,7 +943,7 @@ input,textarea,select{font-family:var(--fn);}
 
 <!-- COMMUNITY -->
 <section class="section" id="sec-community">
-  <div class="sec-hdr"><div class="sec-title">Community</div><div id="community-status" style="font-size:12px;color:var(--muted);">Friends, chat, requests, reports and shared stories are live with Socket.IO.</div></div>
+  <div class="sec-hdr"><div class="sec-title">Community</div><div style="display:flex;align-items:center;gap:14px;"><div id="community-status" style="font-size:12px;color:var(--muted);">Friends, chat, requests, reports and shared stories are live with Socket.IO.</div><div class="online-stat" id="onlineStatBM"><span class="online-dot on"></span><span id="onlineStatTextBM">0 online</span></div></div></div>
   <div class="community-grid">
     <div class="community-card">
       <h3>People <span id="commPeopleCount" style="font-size:10px;color:var(--muted);"></span></h3>
@@ -929,11 +962,13 @@ input,textarea,select{font-family:var(--fn);}
             <div class="chat-header-name" id="chatHeaderNameBM"></div>
             <div class="chat-header-status" id="chatHeaderStatusBM"></div>
           </div>
+          <div class="chat-header-extra" id="chatHeaderExtraBM"></div>
         </div>
       </div>
       <div class="chat-box" id="chatBoxBM"><div class="chat-empty">Select a friend to start chatting.</div></div>
+      <div class="typing-indicator" id="typingIndicatorBM"><div class="typing-dots"><span></span><span></span><span></span></div><span id="typingTextBM"></span></div>
       <div class="chat-send">
-        <input class="finput" id="chatInputBM" placeholder="Write a message..." onkeydown="if(event.key==='Enter')sendDirectMessageBM()">
+        <input class="finput" id="chatInputBM" placeholder="Write a message..." oninput="bmHandleTypingBM()" onkeydown="if(event.key==='Enter')sendDirectMessageBM()">
         <button class="btn-primary chat-send-btn" onclick="sendDirectMessageBM()" title="Send">➤</button>
       </div>
     </div>
@@ -2358,14 +2393,31 @@ function bmConnectSocket(){
       bmCommunity.groupMessages=bmCommunity.groupMessages||{};
       bmCommunity.groupMessages[data.groupId]=bmCommunity.groupMessages[data.groupId]||[];
       if(!bmCommunity.groupMessages[data.groupId].some(m=>m.time===data.msg.time&&m.from===data.msg.from))bmCommunity.groupMessages[data.groupId].push(data.msg);
-      if(data.msg.from!==bmMe() && bmActiveGroupId!==data.groupId){const g=(bmCommunity.groups||[]).find(x=>x.id===data.groupId); bmAddNotification({type:'group',title:'New group message',text:(data.msg.fromDisplay||data.msg.from)+' in '+(g?g.name:'a group')});}
+      if(data.msg.from!==bmMe() && bmActiveGroupId!==data.groupId){const g=(bmCommunity.groups||[]).find(x=>x.id===data.groupId); bmAddNotification({type:'group',title:'New group message',text:(data.msg.fromDisplay||data.msg.from)+' in '+(g?g.name:'a group')}); renderCommunityGroupsBM();}
+      if(data.msg.from!==bmMe())bmNotifyBM((data.msg.fromDisplay||data.msg.from)+' (group)',data.msg.text);
       if(bmActiveGroupId===data.groupId)renderActiveChatBM();
     });
     bmSocket.on('group:error',msg=>showToast(msg));
+    bmSocket.on('typing',data=>{
+      const relevant=(bmActiveGroupId && data.groupId===bmActiveGroupId) || (!bmActiveGroupId && bmActiveChatUser===data.from);
+      if(!relevant)return;
+      const ind=document.getElementById('typingIndicatorBM'), txt=document.getElementById('typingTextBM');
+      if(!ind||!txt)return;
+      txt.textContent=(data.fromDisplay||data.from)+' is typing';
+      ind.classList.add('show');
+      clearTimeout(bmTypingHideTimeoutBM);
+      bmTypingHideTimeoutBM=setTimeout(()=>ind.classList.remove('show'),2500);
+    });
     bmSocket.on('moderation:warning',data=>{
       const el=document.getElementById('modWarningBM');
-      if(el){el.textContent='⚠️ Warning: inappropriate language detected ('+data.hits+'/5). Two more strikes and you will be banned for 7 days.'; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),6000);}
+      if(el){el.classList.remove('muted'); el.textContent='⚠️ Warning: inappropriate language detected ('+data.hits+'/5). Two more strikes and you will be banned for 7 days.'; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),6000);}
     });
+    bmSocket.on('moderation:muted',data=>{
+      const el=document.getElementById('modWarningBM');
+      const mins=data?.until?Math.ceil((data.until-Date.now())/60000):null;
+      if(el){el.classList.add('muted'); el.textContent=mins?'🔇 You have been muted by an admin for '+mins+' more minute(s).':'🔇 You have been muted by an admin.'; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),6000);}
+    });
+    bmSocket.on('admin:kicked',()=>{showToast('You were disconnected by the owner'); setTimeout(()=>window.location.reload(),1500);});
     bmSocket.on('admin:verify-update',data=>{
       if(!CU)return;
       const verified=!!data?.verified;
@@ -2379,7 +2431,7 @@ function bmConnectSocket(){
     bmSocket.on('community:state',data=>{bmCommunity=data.community||{}; bmAllProfiles=data.profiles||bmAllProfiles||{}; renderCommunityBM(); if(isOwnerUser(CU))bmRenderAdminReportsBM(bmCommunity.reports||[]);});
     bmSocket.on('friend:request',data=>{bmAddNotification({type:'friend-request',from:data.fromUsername,title:'Friend request',text:(data.fromDisplay||data.fromUsername)+' sent you a friend request.'});});
     bmSocket.on('friend:update',data=>{bmCommunity=data.community||bmCommunity; renderCommunityBM();});
-    bmSocket.on('dm:new',data=>{bmCommunity=data.community||bmCommunity; if(data.from!==bmMe())bmAddNotification({type:'dm',title:'New message',text:'Message from '+(data.fromDisplay||data.from)}); renderCommunityBM();});
+    bmSocket.on('dm:new',data=>{bmCommunity=data.community||bmCommunity; if(data.from!==bmMe()){bmAddNotification({type:'dm',title:'New message',text:'Message from '+(data.fromDisplay||data.from)}); bmNotifyBM(data.fromDisplay||data.from,'Sent you a message'); if(bmActiveChatUser===data.from && bmSocketReady)bmSocket.emit('dm:read',{peer:data.from,user:bmCurrentUserPayload()});} renderCommunityBM();});
     bmSocket.on('community:story:new',data=>{bmCommunity=data.community||bmCommunity; if(data.story)showToast('New community story: '+data.story.title); renderCommunityBM();});
     bmSocket.on('admin:report',data=>{if(isOwnerUser(CU)){bmAddNotification({type:'report',title:'New report',text:'Report against '+data.reportedUsername+' — '+data.why}); bmRenderAdminReportsBM(data.reports||[]);}});
 
@@ -2441,7 +2493,20 @@ function bmRenderAdminUsers(){
   const box=document.getElementById('adminUsersBM'); if(!box)return;
   const users=bmConnectedUsers||[];
   if(!users.length){box.innerHTML='<div style="padding:12px;color:var(--muted);font-size:12px;">No live users yet. Open another browser tab to test.</div>';return;}
-  box.innerHTML=users.map(u=>{const banned=(bmBannedUsers||[]).includes(u.username);const verified=!!u.verified;const isOwnerRow=!!u.owner||u.username==='BookMania';return `<div class="admin-user-row"><div><b>${escBM(u.displayName||u.username)}</b>${verified?' <span class="verified-tick" title="Verified">✓</span>':''}<div style="color:var(--muted);font-size:10px;">${escBM(u.username)}</div></div><div style="display:flex;gap:6px;align-items:center;"><span class="admin-chip ${banned?'':'ok'}">${banned?'BANNED':'LIVE'}</span>${isOwnerRow?'':`<button class="btn-outline" style="padding:5px 8px;font-size:10px;" onclick="adminVerifyBM('${escBM(u.username)}',${!verified})">${verified?'Unverify':'Verify ✓'}</button>`}<button class="btn-outline" style="padding:5px 8px;font-size:10px;" onclick="adminBanBM('${escBM(u.username)}',${!banned})">${banned?'Unban':'Ban'}</button></div></div>`;}).join('');
+  box.innerHTML=users.map(u=>{const banned=(bmBannedUsers||[]).includes(u.username);const verified=!!u.verified;const isOwnerRow=!!u.owner||u.username==='BookMania';return `<div class="admin-user-row"><div><b>${escBM(u.displayName||u.username)}</b>${verified?' <span class="verified-tick" title="Verified">✓</span>':''}<div style="color:var(--muted);font-size:10px;">${escBM(u.username)}</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;"><span class="admin-chip ${banned?'':'ok'}">${banned?'BANNED':'LIVE'}</span>${isOwnerRow?'':`<button class="btn-outline" style="padding:5px 8px;font-size:10px;" onclick="adminVerifyBM('${escBM(u.username)}',${!verified})">${verified?'Unverify':'Verify ✓'}</button><button class="btn-outline" style="padding:5px 8px;font-size:10px;" onclick="adminMuteBM('${escBM(u.username)}')">Mute</button><button class="btn-outline" style="padding:5px 8px;font-size:10px;" onclick="adminKickBM('${escBM(u.username)}')">Kick</button>`}<button class="btn-outline" style="padding:5px 8px;font-size:10px;" onclick="adminBanBM('${escBM(u.username)}',${!banned})">${banned?'Unban':'Ban'}</button></div></div>`;}).join('');
+}
+function adminMuteBM(username){
+  if(!bmSocketReady)return showToast('Socket not connected');
+  const mins=Number(prompt('Mute @'+username+' for how many minutes?','10'));
+  if(!mins||mins<=0)return;
+  bmSocket.emit('admin:mute',{admin:bmCurrentUserPayload(),username,minutes:mins});
+  showToast('Muted @'+username+' for '+mins+' min');
+}
+function adminKickBM(username){
+  if(!bmSocketReady)return showToast('Socket not connected');
+  if(!confirm('Disconnect @'+username+' right now?'))return;
+  bmSocket.emit('admin:kick',{admin:bmCurrentUserPayload(),username});
+  showToast('Kicked @'+username);
 }
 function adminRestartBM(){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('admin:restart',bmCurrentUserPayload());}
 function adminSendGlobalBM(){const msg=document.getElementById('adminGlobalTextBM').value.trim(); if(!msg)return showToast('Write a message'); bmSocket.emit('admin:global',{admin:bmCurrentUserPayload(),message:msg});}
@@ -2630,6 +2695,7 @@ changeProfilePic=function(inp){
 // === COMMUNITY SOCKET.IO PATCH ===
 let bmAllProfiles={}, bmCommunity={}, bmNotifications=[], bmActiveChatUser=null, bmReportTarget=null;
 let bmActiveGroupId=null, bmBanModalTarget=null, bmBanInfo=null, bmBanCountdownTimer=null;
+let bmTypingHideTimeoutBM=null, bmTypingThrottleBM=null;
 function bmMe(){return bmCurrentUserPayload().username;}
 function bmProfileOf(username){return bmAllProfiles[username] || (bmConnectedUsers||[]).find(u=>u.username===username) || {username,displayName:username,initials:String(username||'??').slice(0,2).toUpperCase(),avatarUrl:''};}
 function bmIsOnline(username){return (bmConnectedUsers||[]).some(u=>u.username===username);}
@@ -2646,6 +2712,17 @@ function bmRelation(username){
   return 'none';
 }
 function communityAvatarBM(profile,size=38){return avatarHTMLBM({user:profile.displayName||profile.username,ini:profile.initials,avatarUrl:profile.avatarUrl,av:'av-b'},size);}
+function bmUnreadDmCountBM(username){
+  const list=(bmCommunity.directMessages&&bmCommunity.directMessages[dmKeyBM(bmMe(),username)])||[];
+  return list.filter(m=>m.to===bmMe()&&!m.seen).length;
+}
+function bmGroupLastViewedBM(groupId){return Number(localStorage.getItem('bm_group_seen_'+groupId)||0);}
+function bmMarkGroupViewedBM(groupId){localStorage.setItem('bm_group_seen_'+groupId,String(Date.now()));}
+function bmUnreadGroupCountBM(group){
+  const list=(bmCommunity.groupMessages&&bmCommunity.groupMessages[group.id])||[];
+  const since=bmGroupLastViewedBM(group.id);
+  return list.filter(m=>m.from!==bmMe()&&(m.time||0)>since).length;
+}
 function renderCommunityBM(){
   const peopleBox=document.getElementById('communityPeopleBM'); if(!peopleBox)return;
   const q=(document.getElementById('communitySearchBM')?.value||'').toLowerCase();
@@ -2654,33 +2731,68 @@ function renderCommunityBM(){
   const names=Object.keys(profileMap).filter(u=>u!==bmMe() && u!=='' && !((bmCommunity.blocks?.[u]||[]).includes(bmMe())));
   const filtered=names.filter(u=>{const p=profileMap[u];return !q || u.toLowerCase().includes(q) || (p.displayName||'').toLowerCase().includes(q);}).sort((a,b)=>Number(bmIsOnline(b))-Number(bmIsOnline(a)) || a.localeCompare(b));
   const count=document.getElementById('commPeopleCount'); if(count) count.textContent=filtered.length+' users';
+  const onlineTxt=document.getElementById('onlineStatTextBM'); if(onlineTxt) onlineTxt.textContent=(bmConnectedUsers||[]).length+' online';
   if(!filtered.length){peopleBox.innerHTML='<div style="color:var(--muted);font-size:12px;padding:12px;">No people found. Open another account in another browser to test.</div>';}
   else peopleBox.innerHTML=filtered.map(username=>{
     const p=profileMap[username], rel=bmRelation(username), online=bmIsOnline(username);
+    const unread=rel==='friend'?bmUnreadDmCountBM(username):0;
     let actions='';
     if(rel==='friend') actions=`<button class="mini-btn" onclick="openChatBM('${escBM(username)}')">Chat</button><button class="mini-btn" onclick="friendRemoveBM('${escBM(username)}')">Unfriend</button><button class="mini-btn danger" onclick="blockUserBM('${escBM(username)}')">Block</button><button class="mini-btn danger" onclick="openReportBM('${escBM(username)}')">Report</button>`;
     else if(rel==='incoming') actions=`<button class="mini-btn" onclick="friendRespondBM('${escBM(username)}',true)">Accept</button><button class="mini-btn danger" onclick="friendRespondBM('${escBM(username)}',false)">Decline</button><button class="mini-btn danger" onclick="openReportBM('${escBM(username)}')">Report</button>`;
     else if(rel==='outgoing') actions=`<button class="mini-btn" disabled>Request sent</button><button class="mini-btn danger" onclick="friendRemoveBM('${escBM(username)}')">Cancel</button>`;
     else if(rel==='blocked') actions=`<button class="mini-btn" onclick="unblockUserBM('${escBM(username)}')">Unblock</button>`;
     else actions=`<button class="mini-btn" onclick="friendRequestBM('${escBM(username)}')">Add Friend</button><button class="mini-btn danger" onclick="blockUserBM('${escBM(username)}')">Block</button><button class="mini-btn danger" onclick="openReportBM('${escBM(username)}')">Report</button>`;
-    return `<div class="community-user">${communityAvatarBM(p,38)}<div class="community-user-info"><div class="community-name">${escBM(p.displayName||username)}${p.verified?verifiedHTML({verified:true}):''}</div><div class="community-sub"><span class="online-dot ${online?'on':''}"></span>${online?'Online':'Offline'} · @${escBM(username)}</div><div class="community-actions">${actions}</div></div></div>`;
+    return `<div class="community-user">${communityAvatarBM(p,38)}<div class="community-user-info"><div class="community-name">${escBM(p.displayName||username)}${p.verified?verifiedHTML({verified:true}):''}</div><div class="community-sub"><span class="online-dot ${online?'on':''}"></span>${online?'Online':'Offline'} · @${escBM(username)}</div><div class="community-actions">${actions}</div></div>${unread?`<span class="unread-badge">${unread}</span>`:''}</div>`;
   }).join('');
   renderCommunityStoriesBM(); renderCommunityGroupsBM(); renderActiveChatBM(); bmRenderNotificationsBM();
+}
+function bmHandleTypingBM(){
+  if(!bmSocketReady)return;
+  if(bmTypingThrottleBM)return;
+  bmTypingThrottleBM=setTimeout(()=>{bmTypingThrottleBM=null;},2000);
+  if(bmActiveGroupId) bmSocket.emit('typing',{groupId:bmActiveGroupId,user:bmCurrentUserPayload()});
+  else if(bmActiveChatUser) bmSocket.emit('typing',{toUsername:bmActiveChatUser,user:bmCurrentUserPayload()});
+}
+function bmBeepBM(){
+  try{
+    const ctx=new (window.AudioContext||window.webkitAudioContext)();
+    const o=ctx.createOscillator(), g=ctx.createGain();
+    o.type='sine'; o.frequency.value=740; g.gain.value=0.08;
+    o.connect(g); g.connect(ctx.destination); o.start();
+    setTimeout(()=>{o.stop(); ctx.close();},140);
+  }catch(e){}
+}
+function bmNotifyBM(title,body){
+  if(document.hidden){
+    bmBeepBM();
+    if(typeof Notification!=='undefined' && Notification.permission==='granted'){
+      try{new Notification(title,{body:body||'',icon:'',tag:'bookmania-msg'});}catch(e){}
+    }
+  }
+}
+if(typeof Notification!=='undefined' && Notification.permission==='default'){
+  document.addEventListener('click',function bmReqNotifOnce(){Notification.requestPermission(); document.removeEventListener('click',bmReqNotifOnce);},{once:true});
 }
 function friendRequestBM(username){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('friend:request',{toUsername:username,user:bmCurrentUserPayload()});}
 function friendRespondBM(fromUsername,accept){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('friend:respond',{fromUsername,accept,user:bmCurrentUserPayload()});}
 function friendRemoveBM(username){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('friend:remove',{username,user:bmCurrentUserPayload()}); if(bmActiveChatUser===username)bmActiveChatUser=null;}
 function blockUserBM(username){if(!bmSocketReady)return showToast('Socket not connected'); if(!confirm('Block '+username+'?'))return; bmSocket.emit('friend:block',{username,user:bmCurrentUserPayload()}); if(bmActiveChatUser===username)bmActiveChatUser=null;}
 function unblockUserBM(username){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit('friend:unblock',{username,user:bmCurrentUserPayload()});}
-function openChatBM(username){bmActiveChatUser=username; bmActiveGroupId=null; renderActiveChatBM();}
-function openGroupChatBM(groupId){bmActiveGroupId=groupId; bmActiveChatUser=null; renderActiveChatBM();}
+function openChatBM(username){bmActiveChatUser=username; bmActiveGroupId=null; renderActiveChatBM(); if(bmSocketReady)bmSocket.emit('dm:read',{peer:username,user:bmCurrentUserPayload()});}
+function openGroupChatBM(groupId){bmActiveGroupId=groupId; bmActiveChatUser=null; bmMarkGroupViewedBM(groupId); renderActiveChatBM(); renderCommunityGroupsBM();}
 function dmKeyBM(a,b){return [a,b].sort().join('::');}
 function bmMyGroups(){return (bmCommunity.groups||[]).filter(g=>(g.members||[]).includes(bmMe()));}
 function renderCommunityGroupsBM(){
   const box=document.getElementById('communityGroupsBM'); if(!box)return;
   const groups=bmMyGroups();
   if(!groups.length){box.innerHTML='<div style="color:var(--muted);font-size:11px;padding:10px;">No groups yet. Create one with 2+ friends.</div>';return;}
-  box.innerHTML=groups.map(g=>`<div class="group-row" onclick="openGroupChatBM('${escBM(g.id)}')"><div class="group-icon">👥</div><div class="community-user-info"><div class="community-name">${escBM(g.name)}</div><div class="community-sub">${g.members.length} members</div></div></div>`).join('');
+  box.innerHTML=groups.map(g=>{const unread=bmActiveGroupId===g.id?0:bmUnreadGroupCountBM(g); return `<div class="group-row" onclick="openGroupChatBM('${escBM(g.id)}')"><div class="group-icon">👥</div><div class="community-user-info"><div class="community-name">${escBM(g.name)}</div><div class="community-sub">${g.members.length} members</div></div>${unread?`<span class="unread-badge">${unread}</span>`:''}</div>`;}).join('');
+}
+function leaveGroupBM(groupId){
+  if(!confirm('Leave this group?'))return;
+  if(bmSocketReady)bmSocket.emit('group:leave',{groupId,user:bmCurrentUserPayload()});
+  if(bmActiveGroupId===groupId)bmActiveGroupId=null;
+  renderCommunityGroupsBM(); renderActiveChatBM();
 }
 function openGroupCreateBM(){
   const friends=bmCommunity.friendships?.[bmMe()]||[];
@@ -2702,7 +2814,7 @@ function confirmGroupCreateBM(){
 function renderActiveChatBM(){
   const box=document.getElementById('chatBoxBM');
   const headerEmpty=document.getElementById('chatHeaderEmptyBM'), headerActive=document.getElementById('chatHeaderActiveBM');
-  const headerAv=document.getElementById('chatHeaderAvBM'), headerName=document.getElementById('chatHeaderNameBM'), headerStatus=document.getElementById('chatHeaderStatusBM');
+  const headerAv=document.getElementById('chatHeaderAvBM'), headerName=document.getElementById('chatHeaderNameBM'), headerStatus=document.getElementById('chatHeaderStatusBM'), headerExtra=document.getElementById('chatHeaderExtraBM');
   if(!box)return;
   if(bmActiveGroupId){
     const group=(bmCommunity.groups||[]).find(g=>g.id===bmActiveGroupId);
@@ -2711,7 +2823,8 @@ function renderActiveChatBM(){
     if(headerActive)headerActive.style.display='flex';
     if(headerAv)headerAv.innerHTML='<div class="group-icon" style="width:34px;height:34px;">👥</div>';
     if(headerName)headerName.textContent=group.name;
-    if(headerStatus){headerStatus.textContent=group.members.length+' members'; headerStatus.classList.remove('on');}
+    if(headerStatus){headerStatus.textContent=group.members.length+' members: '+group.members.map(m=>'@'+m).join(', '); headerStatus.classList.remove('on');}
+    if(headerExtra)headerExtra.innerHTML=`<button onclick="leaveGroupBM('${escBM(group.id)}')">Leave</button>`;
     const list=(bmCommunity.groupMessages&&bmCommunity.groupMessages[bmActiveGroupId])||[];
     if(!list.length){box.innerHTML='<div class="chat-empty">No messages yet. Say hi to the group.</div>';return;}
     let lastFrom=null;
@@ -2737,16 +2850,19 @@ function renderActiveChatBM(){
   if(headerAv)headerAv.innerHTML=communityAvatarBM(p,34);
   if(headerName)headerName.innerHTML=escBM(p.displayName||bmActiveChatUser)+(p.verified?verifiedHTML({verified:true}):'');
   if(headerStatus){headerStatus.textContent=online?'Online':'Offline'; headerStatus.classList.toggle('on',!!online);}
+  if(headerExtra)headerExtra.innerHTML='';
   const list=(bmCommunity.directMessages&&bmCommunity.directMessages[dmKeyBM(bmMe(),bmActiveChatUser)])||[];
   if(!list.length){box.innerHTML='<div class="chat-empty">No messages yet. Say hi.</div>';return;}
   let lastFrom=null;
-  box.innerHTML=list.map(m=>{
+  box.innerHTML=list.map((m,i)=>{
     const mine=m.from===bmMe();
     const grouped=lastFrom===m.from; lastFrom=m.from;
     const mp=mine?null:p;
     const avHTML=mine?'':`<div class="chat-av">${grouped?'':communityAvatarBM(mp,24)}</div>`;
     const time=new Date(m.time||Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-    return `<div class="chat-row ${mine?'me':''} ${grouped?'grouped':''}">${avHTML}<div class="chat-msg">${grouped?'':`<div class="chat-meta">${escBM(m.fromDisplay||m.from)}</div>`}${escBM(m.text)}<div class="chat-time">${time}</div></div></div>`;
+    const isLastMine=mine && !list.slice(i+1).some(x=>x.from===bmMe());
+    const seenTick=isLastMine?`<span class="chat-seen ${m.seen?'seen':''}">${m.seen?'✓✓ Seen':'✓ Sent'}</span>`:'';
+    return `<div class="chat-row ${mine?'me':''} ${grouped?'grouped':''}">${avHTML}<div class="chat-msg">${grouped?'':`<div class="chat-meta">${escBM(m.fromDisplay||m.from)}</div>`}${escBM(m.text)}<div class="chat-time">${time}${seenTick}</div></div></div>`;
   }).join('');
   box.scrollTop=box.scrollHeight;
 }
@@ -2969,13 +3085,25 @@ renderCommunityStoriesBM=function(){
   const box=document.getElementById('communityStoriesBM'); if(!box)return;
   const stories=(bmCommunity&&bmCommunity.communityStories)||[];
   if(!stories.length){box.innerHTML='<div style="color:var(--muted);font-size:12px;padding:10px;">No community stories yet.</div>';return;}
+  const REACT_EMOJIS=['❤️','😂','👍','🔥','😮'];
   box.innerHTML=stories.map(st=>{
     const base=bmProfileOf(st.username);
     const verified=bmIsVerifiedStoryAuthorBM(st,base);
     const p={...base,displayName:st.displayName||base.displayName||st.username,avatarUrl:st.avatarUrl||base.avatarUrl,initials:st.initials||base.initials,verified,owner:!!st.owner||!!base.owner};
-    return `<div class="community-post"><div style="display:flex;align-items:center;gap:9px;">${communityAvatarBM(p,32)}<div><div class="community-name">${escBM(p.displayName||st.username)}${verifiedHTML({verified})}</div><div class="community-sub">${new Date(st.time||Date.now()).toLocaleString()}</div></div></div><div class="community-post-title">${escBM(st.title)}</div><div class="community-post-text">${escBM(st.text)}</div></div>`;
+    const reactions=st.reactions||{};
+    const reactHTML=REACT_EMOJIS.map(e=>{
+      const users=reactions[e]||[]; if(!users.length)return '';
+      const mine=users.includes(bmMe());
+      return `<button class="reaction-btn ${mine?'mine':''}" onclick="reactToStoryBM('${st.id}','${e}')">${e}<span class="reaction-count">${users.length}</span></button>`;
+    }).join('');
+    const addHTML=REACT_EMOJIS.filter(e=>!(reactions[e]||[]).length).map(e=>`<button class="reaction-btn" onclick="reactToStoryBM('${st.id}','${e}')">${e}</button>`).join('');
+    return `<div class="community-post"><div style="display:flex;align-items:center;gap:9px;">${communityAvatarBM(p,32)}<div><div class="community-name">${escBM(p.displayName||st.username)}${verifiedHTML({verified})}</div><div class="community-sub">${new Date(st.time||Date.now()).toLocaleString()}</div></div></div><div class="community-post-title">${escBM(st.title)}</div><div class="community-post-text">${escBM(st.text)}</div><div class="reaction-row">${reactHTML}${addHTML}</div></div>`;
   }).join('');
 };
+function reactToStoryBM(storyId,emoji){
+  if(!bmSocketReady)return showToast('Socket not connected');
+  bmSocket.emit('community:react',{storyId,emoji,user:bmCurrentUserPayload()});
+}
 shareCommunityStoryBM=function(){
   const title=document.getElementById('communityStoryTitleBM').value.trim();
   const text=document.getElementById('communityStoryTextBM').value.trim();
