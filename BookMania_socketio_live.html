@@ -24,6 +24,12 @@ input,textarea,select{font-family:var(--fn);}
 /* AUTH */
 #auth-screen{position:fixed;inset:0;z-index:9999;background:var(--ink);display:none;align-items:center;justify-content:center;padding:24px;}
 #auth-screen.show{display:flex;}
+.auth-or{display:flex;align-items:center;gap:10px;margin:16px 0;color:var(--muted);font-size:11px;letter-spacing:.4px;text-transform:uppercase;}
+.auth-or::before,.auth-or::after{content:'';flex:1;height:1px;background:var(--border);}
+.gsi-btn-fallback{width:100%;padding:11px;border-radius:10px;background:#fff;color:#1f1f1f;font-weight:600;font-size:14px;display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid var(--border);}
+.otp-row{display:flex;gap:8px;justify-content:center;margin-bottom:14px;}
+.otp-input{width:42px;height:52px;text-align:center;font-size:22px;font-weight:700;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.04);color:var(--cream);font-family:var(--fn);}
+.otp-input:focus{outline:none;border-color:var(--amber);box-shadow:0 0 0 3px rgba(233,168,76,.16);}
 
 /* INTRO SPLASH */
 #intro-splash{position:fixed;inset:0;z-index:10000;background:radial-gradient(circle at 50% 45%,#20141c 0%,var(--ink) 60%,#000 100%);display:flex;align-items:center;justify-content:center;overflow:hidden;}
@@ -441,6 +447,14 @@ input,textarea,select{font-family:var(--fn);}
 .admin-card h3{font-size:14px;color:var(--cream);margin-bottom:8px;}
 .admin-card p{font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:10px;}
 .admin-list{max-height:230px;overflow:auto;border:1px solid var(--border);border-radius:10px;background:rgba(0,0,0,.12);}
+.admin-stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin:16px 0;}
+.admin-stat{background:linear-gradient(160deg,rgba(233,168,76,.12),rgba(0,0,0,.15));border:1px solid var(--border);border-radius:12px;padding:12px 10px;text-align:center;}
+.admin-stat-n{font-family:var(--fs);font-size:22px;color:var(--cream);font-weight:700;}
+.admin-stat-l{font-size:9px;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;margin-top:3px;}
+.admin-audit-row{padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;color:var(--text);display:flex;flex-direction:column;gap:2px;}
+.admin-audit-row:last-child{border-bottom:0;}
+.admin-audit-row b{color:var(--amber);}
+.admin-audit-time{font-size:9px;color:var(--muted);}
 .admin-user-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;border-bottom:1px solid var(--border);font-size:12px;}
 .admin-user-row:last-child{border-bottom:0;}
 .admin-chip{font-size:9px;font-weight:900;border-radius:999px;padding:3px 7px;background:rgba(242,107,107,.16);color:#ff9b9b;border:1px solid rgba(242,107,107,.25);}
@@ -609,6 +623,7 @@ input,textarea,select{font-family:var(--fn);}
 .chat-header-extra button:hover{border-color:var(--red);color:var(--red);}
 
 </style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
@@ -630,18 +645,41 @@ input,textarea,select{font-family:var(--fn);}
   <div class="auth-box">
     <div class="auth-logo">Book<span>Mania</span></div>
     <div class="auth-sub">Read. Listen. Discover. Create.</div>
-    <div class="auth-tabs">
-      <button class="auth-tab active" onclick="switchAuthTab('login',this)">Sign In</button>
-      <button class="auth-tab" onclick="switchAuthTab('signup',this)">Create Account</button>
+
+    <!-- STEP 1: email + Google -->
+    <div id="auth-step-email">
+      <div id="google-btn-wrap" style="display:flex;justify-content:center;margin-bottom:14px;"></div>
+      <div class="auth-or"><span>or continue with email</span></div>
+      <div class="auth-field"><label class="auth-label">Email address</label><input class="auth-input" type="email" id="auth-email" placeholder="you@email.com" autocomplete="email"></div>
+      <div class="auth-err" id="auth-email-err"></div>
+      <button class="auth-btn" id="auth-send-code-btn" onclick="authSendCode()">Send Sign-In Code</button>
+      <div style="text-align:center;margin-top:14px;font-size:11px;color:var(--muted);">No password needed. We'll email you a 6-digit code.</div>
     </div>
-    <div id="login-form">
-      <div class="auth-field"><label class="auth-label">Username or Email</label><input class="auth-input" type="text" id="login-user" placeholder="your@email.com"></div>
-      <div class="auth-field"><label class="auth-label">Password</label><input class="auth-input" type="password" id="login-pass" placeholder="••••••••"></div>
-      <div class="auth-err" id="login-err">Incorrect username or password.</div>
-      <button class="auth-btn" onclick="doLogin()">Sign In</button>
-      <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--muted);">No account? <span style="color:var(--amber);cursor:pointer;" onclick="document.querySelectorAll('.auth-tab').forEach((t,i)=>{t.classList.toggle('active',i===1)});document.getElementById('login-form').style.display='none';document.getElementById('signup-form').style.display='block';">Create one</span></div>
+
+    <!-- STEP 2: 6-digit code -->
+    <div id="auth-step-code" style="display:none;">
+      <div class="auth-sub" style="margin-bottom:18px;">Enter the 6-digit code sent to<br><b id="auth-code-email" style="color:var(--amber);"></b></div>
+      <div class="otp-row" id="otp-row">
+        <input class="otp-input" maxlength="1" inputmode="numeric" data-i="0">
+        <input class="otp-input" maxlength="1" inputmode="numeric" data-i="1">
+        <input class="otp-input" maxlength="1" inputmode="numeric" data-i="2">
+        <input class="otp-input" maxlength="1" inputmode="numeric" data-i="3">
+        <input class="otp-input" maxlength="1" inputmode="numeric" data-i="4">
+        <input class="otp-input" maxlength="1" inputmode="numeric" data-i="5">
+      </div>
+      <div class="auth-err" id="auth-code-err"></div>
+      <div id="auth-dev-code" style="display:none;text-align:center;font-size:11px;color:var(--green);margin-bottom:10px;background:rgba(61,220,132,.08);border:1px dashed var(--green);border-radius:8px;padding:8px;"></div>
+      <button class="auth-btn" id="auth-verify-btn" onclick="authVerifyCode()">Verify &amp; Continue</button>
+      <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:12px;color:var(--muted);">
+        <span id="auth-timer">Code expires in 20:00</span>
+        <span style="color:var(--amber);cursor:pointer;" id="auth-resend-btn" onclick="authSendCode(true)">Resend code</span>
+      </div>
+      <div style="text-align:center;margin-top:10px;font-size:12px;color:var(--muted);"><span style="color:var(--amber);cursor:pointer;" onclick="authGoToStep('email')">&larr; Use a different email</span></div>
     </div>
-    <div id="signup-form" style="display:none;">
+
+    <!-- STEP 3: choose username (new accounts only) -->
+    <div id="auth-step-profile" style="display:none;">
+      <div class="auth-sub" style="margin-bottom:18px;">You're verified! Set up your profile to finish.</div>
       <div class="av-upload-wrap">
         <div class="av-preview" id="av-preview" onclick="document.getElementById('av-file').click()">
           <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
@@ -649,19 +687,14 @@ input,textarea,select{font-family:var(--fn);}
         <div class="av-hint">Tap to add profile picture</div>
         <input type="file" id="av-file" accept="image/*" style="display:none;" onchange="handleAvatar(this)">
       </div>
-      <div class="frow">
-        <div class="auth-field"><label class="auth-label">First Name</label><input class="auth-input" type="text" id="su-fname" placeholder="Arjun"></div>
-        <div class="auth-field"><label class="auth-label">Last Name</label><input class="auth-input" type="text" id="su-lname" placeholder="Sharma"></div>
-      </div>
-      <div class="auth-field"><label class="auth-label">Email</label><input class="auth-input" type="email" id="su-email" placeholder="arjun@email.com"></div>
-      <div class="auth-field"><label class="auth-label">Username</label><input class="auth-input" type="text" id="su-uname" placeholder="bookworm_arjun"></div>
-      <div class="auth-field"><label class="auth-label">Password</label><input class="auth-input" type="password" id="su-pass" placeholder="Min. 8 characters"></div>
+      <div class="auth-field"><label class="auth-label">Display Name</label><input class="auth-input" type="text" id="su-display" placeholder="Arjun Sharma"></div>
+      <div class="auth-field"><label class="auth-label">Username</label><input class="auth-input" type="text" id="su-uname" placeholder="bookworm_arjun" oninput="this.value=this.value.replace(/[^a-zA-Z0-9_]/g,'')"></div>
       <div class="auth-err" id="su-err"></div>
-      <button class="auth-btn" onclick="doSignup()">Create Account</button>
-      <div style="text-align:center;margin-top:14px;font-size:12px;color:var(--muted);">Already have an account? <span style="color:var(--amber);cursor:pointer;" onclick="document.querySelectorAll('.auth-tab').forEach((t,i)=>{t.classList.toggle('active',i===0)});document.getElementById('signup-form').style.display='none';document.getElementById('login-form').style.display='block';">Sign in</span></div>
+      <button class="auth-btn" onclick="authFinishSignup()">Enter BookMania</button>
     </div>
   </div>
 </div>
+
 
 <!-- APP -->
 <div id="app" style="display:none;">
@@ -694,6 +727,10 @@ input,textarea,select{font-family:var(--fn);}
     Change Profile Picture
   </label>
   <input type="file" id="ppic-input" accept="image/*" style="display:none;" onchange="changeProfilePic(this)">
+  <button class="pdrop-item" onclick="openChangeUsernameBM()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+    Change Username
+  </button>
   <button class="pdrop-item" onclick="switchTab('library');closeProfile()">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
     My Library
@@ -1098,6 +1135,20 @@ input,textarea,select{font-family:var(--fn);}
   </div>
 </div>
 
+<div class="moverlay" id="changeUsernameModalBM">
+  <div class="modal" style="max-width:420px;">
+    <div class="mclose-row"><button class="mclose" onclick="closeChangeUsernameBM()">×</button></div>
+    <div class="mbody">
+      <div class="cp-title">Change Username</div>
+      <div class="cp-sub">Your current username is <b id="cu-current" style="color:var(--amber);"></b>. Friends, messages, and stories carry over automatically.</div>
+      <label class="auth-label" style="display:block;margin:14px 0 6px;">New username</label>
+      <input class="finput" id="cu-new" placeholder="new_username" oninput="this.value=this.value.replace(/[^a-zA-Z0-9_]/g,'')">
+      <div class="auth-err" id="cu-err" style="display:none;"></div>
+      <button class="btn-primary" style="width:100%;margin-top:12px;" onclick="submitChangeUsernameBM()">Save Username</button>
+    </div>
+  </div>
+</div>
+
 <div class="moverlay" id="banModalBM">
   <div class="modal" style="max-width:420px;">
     <div class="mclose-row"><button class="mclose" onclick="closeBanModalBM()">×</button></div>
@@ -1121,6 +1172,16 @@ input,textarea,select{font-family:var(--fn);}
     <div class="mbody">
       <div class="cp-title">Owner Admin Panel <span class="verified-tick">✓</span></div>
       <div class="cp-sub">Live Socket.IO controls. Every action is sent instantly to all connected browsers.</div>
+
+      <div class="admin-stats-grid" id="adminStatsBM">
+        <div class="admin-stat"><div class="admin-stat-n" id="statLiveBM">–</div><div class="admin-stat-l">Live now</div></div>
+        <div class="admin-stat"><div class="admin-stat-n" id="statTotalBM">–</div><div class="admin-stat-l">Total accounts</div></div>
+        <div class="admin-stat"><div class="admin-stat-n" id="statBannedBM">–</div><div class="admin-stat-l">Banned</div></div>
+        <div class="admin-stat"><div class="admin-stat-n" id="statMutedBM">–</div><div class="admin-stat-l">Muted</div></div>
+        <div class="admin-stat"><div class="admin-stat-n" id="statStoriesBM">–</div><div class="admin-stat-l">Stories</div></div>
+        <div class="admin-stat"><div class="admin-stat-n" id="statReportsBM">–</div><div class="admin-stat-l">Reports</div></div>
+      </div>
+
       <div class="admin-grid">
         <div class="admin-card">
           <h3>Restart live screen</h3>
@@ -1129,7 +1190,7 @@ input,textarea,select{font-family:var(--fn);}
         </div>
         <div class="admin-card">
           <h3>Global message</h3>
-          <p>Send or remove a message at the top of everyone’s screen.</p>
+          <p>Send or remove a message at the top of everyone's screen.</p>
           <input class="finput" id="adminGlobalTextBM" placeholder="Write global message...">
           <div style="display:flex;gap:8px;margin-top:9px;">
             <button class="btn-primary" onclick="adminSendGlobalBM()" style="flex:1;">Send</button>
@@ -1138,18 +1199,34 @@ input,textarea,select{font-family:var(--fn);}
         </div>
         <div class="admin-card">
           <h3>Ban / verify by command</h3>
-          <p>Type commands like: <b>/ban username</b>, <b>/unban username</b>, <b>/verify username</b> or <b>/unverify username</b></p>
+          <p>Type commands like: <b>/ban username</b>, <b>/unban username</b>, <b>/verify username</b>, <b>/unverify username</b>, <b>/kick username</b> or <b>/mute username</b></p>
           <input class="finput" id="adminCommandBM" placeholder="/verify Aarush">
           <button class="btn-primary" onclick="adminRunCommandBM()" style="width:100%;margin-top:9px;">Run Command</button>
         </div>
+        <div class="admin-card">
+          <h3>Bulk moderation</h3>
+          <p>Lift every active ban on the server in one click. This cannot be undone individually afterwards.</p>
+          <button class="btn-primary" style="width:100%;background:var(--green);border-color:var(--green);color:#0b1410;" onclick="adminUnbanAllBM()">Unban All Users</button>
+        </div>
       </div>
+
       <div class="admin-card" style="margin-top:14px;">
-        <h3>Connected users</h3>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+          <h3 style="margin:0;">Connected users</h3>
+          <input class="finput" id="adminUserSearchBM" placeholder="Search username..." style="max-width:220px;" oninput="bmRenderAdminUsers()">
+        </div>
         <div class="admin-list" id="adminUsersBM"><div style="padding:12px;color:var(--muted);font-size:12px;">Waiting for Socket.IO...</div></div>
+      </div>
+
+      <div class="admin-card" style="margin-top:14px;">
+        <h3>Audit log</h3>
+        <p>Every ban, mute, kick, and verification action taken from this panel, most recent first.</p>
+        <div class="admin-list" id="adminAuditBM"><div style="padding:12px;color:var(--muted);font-size:12px;">No actions logged yet.</div></div>
       </div>
     </div>
   </div>
 </div>
+
 
 
 
@@ -1357,12 +1434,6 @@ let bOffset=0,bFilter='all',pubStories=[],uLib=[],uRent=[];
 const PG_SZ=30;
 
 // AUTH
-function switchAuthTab(t,el){
-  document.querySelectorAll('.auth-tab').forEach(x=>x.classList.remove('active'));
-  el.classList.add('active');
-  document.getElementById('login-form').style.display=t==='login'?'block':'none';
-  document.getElementById('signup-form').style.display=t==='signup'?'block':'none';
-}
 let pendAv=null;
 function handleAvatar(inp){
   const f=inp.files[0];if(!f)return;
@@ -1370,50 +1441,154 @@ function handleAvatar(inp){
   r.onload=e=>{pendAv=e.target.result;const p=document.getElementById('av-preview');p.innerHTML=`<img src="${e.target.result}">`;}; 
   r.readAsDataURL(f);
 }
-function hashP(p){let h=0;for(let i=0;i<p.length;i++)h=(Math.imul(31,h)+p.charCodeAt(i))|0;return h.toString(36);}
+// ---- New auth: email + 6-digit code (no password), plus Google Sign-In ----
+let authEmail='', authOtpExpiry=0, authTimerIv=null, authResendCooldown=0, authResendIv=null, authIsGoogle=false, authSuggested={};
 function getU(){try{return JSON.parse(localStorage.getItem('bm_u')||'{}')}catch{return{}}}
 function saveU(u){localStorage.setItem('bm_u',JSON.stringify(u));}
-function doSignup(){
-  const fn=document.getElementById('su-fname').value.trim();
-  const ln=document.getElementById('su-lname').value.trim();
-  const em=document.getElementById('su-email').value.trim();
-  const un=document.getElementById('su-uname').value.trim();
-  const pw=document.getElementById('su-pass').value;
-  const er=document.getElementById('su-err');er.style.display='none';
-  if(!fn||!em||!un||!pw){er.textContent='Please fill in all fields.';er.style.display='block';return;}
-  if(pw.length<8){er.textContent='Password must be at least 8 characters.';er.style.display='block';return;}
-  const us=getU();
-  if(us[un]){er.textContent='Username already taken.';er.style.display='block';return;}
-  us[un]={fn,ln,em,un,pw:hashP(pw),av:pendAv||null,lib:[],rent:[]};
-  saveU(us);loginUser(us[un]);
+function authGoToStep(step){
+  document.getElementById('auth-step-email').style.display=step==='email'?'block':'none';
+  document.getElementById('auth-step-code').style.display=step==='code'?'block':'none';
+  document.getElementById('auth-step-profile').style.display=step==='profile'?'block':'none';
+  if(step==='code'){clearInterval(authTimerIv);setTimeout(()=>document.querySelector('.otp-input[data-i="0"]')?.focus(),50);}
 }
-function doLogin(){
-  const u=document.getElementById('login-user').value.trim();
-  const p=document.getElementById('login-pass').value;
-  const er=document.getElementById('login-err');er.style.display='none';
+function authSendCode(isResend){
+  const emEl=document.getElementById('auth-email');
+  const email=(isResend?authEmail:emEl.value.trim()).toLowerCase();
+  const err=document.getElementById('auth-email-err'); err.style.display='none';
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){err.textContent='Enter a valid email address.';err.style.display='block';return;}
+  if(!bmSocketReady){err.textContent='Connecting… try again in a second.';err.style.display='block';return;}
+  authEmail=email;
+  bmSocket.emit('auth:request-code',{email});
+  const btn=document.getElementById('auth-send-code-btn'); if(btn){btn.disabled=true;btn.textContent='Sending…';setTimeout(()=>{btn.disabled=false;btn.textContent='Send Sign-In Code';},1500);}
+}
+function authStartTimer(seconds){
+  authOtpExpiry=Date.now()+seconds*1000;
+  clearInterval(authTimerIv);
+  const tick=()=>{
+    const left=Math.max(0,Math.round((authOtpExpiry-Date.now())/1000));
+    const m=String(Math.floor(left/60)).padStart(2,'0'), s=String(left%60).padStart(2,'0');
+    const el=document.getElementById('auth-timer'); if(el)el.textContent=left>0?`Code expires in ${m}:${s}`:'Code expired — resend below';
+    if(left<=0)clearInterval(authTimerIv);
+  };
+  tick(); authTimerIv=setInterval(tick,1000);
+}
+function authOtpValue(){return [...document.querySelectorAll('.otp-input')].map(i=>i.value).join('');}
+function authVerifyCode(){
+  const code=authOtpValue();
+  const err=document.getElementById('auth-code-err'); err.style.display='none';
+  if(code.length!==6){err.textContent='Enter all 6 digits.';err.style.display='block';return;}
+  if(!bmSocketReady){err.textContent='Connecting… try again in a second.';err.style.display='block';return;}
+  bmSocket.emit('auth:verify-code',{email:authEmail,code});
+}
+function authFinishSignup(){
+  const err=document.getElementById('su-err'); err.style.display='none';
+  const displayName=document.getElementById('su-display').value.trim();
+  const username=document.getElementById('su-uname').value.trim();
+  if(!displayName||!username){err.textContent='Please add a display name and a username.';err.style.display='block';return;}
+  if(!bmValidateSignupNamesBM(displayName,'',username,err))return;
+  if(!bmSocketReady){err.textContent='Connecting… try again in a second.';err.style.display='block';return;}
+  bmSocket.emit('auth:finish-signup',{email:authEmail,username,displayName,avatarUrl:pendAv||authSuggested.avatar||''});
+}
+function authApplyProfile(profile,email){
+  const parts=(profile.displayName||profile.username||'').trim().split(/\s+/);
+  const u={un:profile.username,fn:parts[0]||profile.username,ln:parts.slice(1).join(' ')||'',em:email,av:profile.avatarUrl||null,verified:!!profile.verified,owner:!!profile.owner,lib:[],rent:[]};
   const us=getU();
-  const m=Object.values(us).find(x=>x.un===u||x.em===u);
-  if(!m||m.pw!==hashP(p)){er.style.display='block';return;}
-  loginUser(m);
+  const cached=us[u.un];
+  if(cached){u.lib=cached.lib||[];u.rent=cached.rent||[];}
+  us[u.un]=u; saveU(us);
+  localStorage.setItem('bm_sess',u.un);
+  localStorage.setItem('bm_sess_email',email);
+  loginUser(u);
 }
 function loginUser(u){
   CU=u;uLib=u.lib||[];uRent=u.rent||[];
-  localStorage.setItem('bm_sess',u.un);
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app').style.display='block';
   updateUI();initApp();
 }
 function doLogout(){
-  localStorage.removeItem('bm_sess');CU=null;
+  localStorage.removeItem('bm_sess');localStorage.removeItem('bm_sess_email');CU=null;
   document.getElementById('app').style.display='none';
   document.getElementById('auth-screen').classList.add('show');
+  authGoToStep('email');
   closeProfile();
 }
 function tryAuto(){
   const s=localStorage.getItem('bm_sess');
   const us=getU();
   if(s&&us[s]){loginUser(us[s]);}
-  else{document.getElementById('auth-screen').classList.add('show');}
+  else{document.getElementById('auth-screen').classList.add('show');authGoToStep('email');}
+}
+// OTP box behavior: auto-advance, backspace, and paste support
+document.addEventListener('input',e=>{
+  if(!e.target.classList || !e.target.classList.contains('otp-input'))return;
+  e.target.value=e.target.value.replace(/[^0-9]/g,'').slice(0,1);
+  if(e.target.value){const i=Number(e.target.dataset.i);const next=document.querySelector(`.otp-input[data-i="${i+1}"]`);if(next)next.focus();else authVerifyCode();}
+});
+document.addEventListener('keydown',e=>{
+  if(!e.target.classList || !e.target.classList.contains('otp-input'))return;
+  if(e.key==='Backspace' && !e.target.value){const i=Number(e.target.dataset.i);const prev=document.querySelector(`.otp-input[data-i="${i-1}"]`);if(prev){prev.focus();}}
+});
+document.addEventListener('paste',e=>{
+  if(!e.target.classList || !e.target.classList.contains('otp-input'))return;
+  const text=(e.clipboardData||window.clipboardData).getData('text').replace(/[^0-9]/g,'').slice(0,6);
+  if(!text)return; e.preventDefault();
+  [...document.querySelectorAll('.otp-input')].forEach((inp,i)=>inp.value=text[i]||'');
+  if(text.length===6)authVerifyCode();
+});
+// ---- Google Sign-In ----
+// This renders Google's REAL "Sign in with Google" button — clicking it opens Google's actual
+// account picker popup, exactly like on any other site. The only thing standing between you and
+// that popup is registering your own free OAuth Client ID (Google requires every site to have one;
+// there's no way to skip this step). Takes about 3 minutes:
+//   1. Go to https://console.cloud.google.com/apis/credentials
+//   2. Create Credentials -> OAuth client ID -> Application type: "Web application"
+//   3. Under "Authorized JavaScript origins" add the exact URL this site runs on
+//      (e.g. http://localhost:3000 or https://yourdomain.com)
+//   4. Copy the Client ID it gives you (ends in .apps.googleusercontent.com) and paste it below.
+// Until you do that, this shows a small setup notice instead of silently showing nothing.
+const GOOGLE_CLIENT_ID='YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';
+function initGoogleSignIn(){
+  const wrap=document.getElementById('google-btn-wrap');
+  if(!wrap)return;
+  if(GOOGLE_CLIENT_ID.startsWith('YOUR_GOOGLE_CLIENT_ID')){
+    wrap.innerHTML='<div style="width:100%;border:1px dashed var(--border);border-radius:10px;padding:10px 12px;font-size:11px;color:var(--muted);text-align:center;line-height:1.5;">Google Sign-In isn\'t set up yet — add your Client ID in the code to show the real Google button here.</div>';
+    return;
+  }
+  if(!window.google || !google.accounts || !google.accounts.id){setTimeout(initGoogleSignIn,400);return;}
+  google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:handleGoogleCredential,auto_select:false});
+  wrap.innerHTML='';
+  google.accounts.id.renderButton(wrap,{theme:'filled_black',size:'large',shape:'pill',width:280,text:'continue_with'});
+  // Also offers Google's "One Tap" popup (the small account chooser that appears in the corner)
+  // the first time someone lands on the sign-in screen, same as Google shows on other sites.
+  try{google.accounts.id.prompt();}catch(e){}
+}
+function decodeJwtPayload(token){try{return JSON.parse(decodeURIComponent(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')).split('').map(c=>'%'+('00'+c.charCodeAt(0).toString(16)).slice(-2)).join('')));}catch(e){return null;}}
+function handleGoogleCredential(response){
+  const payload=decodeJwtPayload(response.credential);
+  if(!payload || !payload.email){showToast('Google sign-in failed');return;}
+  if(!bmSocketReady){showToast('Connecting… try again in a second.');return;}
+  authIsGoogle=true;
+  bmSocket.emit('auth:google',{email:payload.email,name:payload.name,picture:payload.picture});
+}
+window.addEventListener('load',()=>setTimeout(initGoogleSignIn,600));
+// ---- Change username from inside the app ----
+function openChangeUsernameBM(){
+  closeProfile();
+  const modal=document.getElementById('changeUsernameModalBM');
+  if(!modal)return;
+  document.getElementById('cu-current').textContent='@'+CU.un;
+  document.getElementById('cu-new').value='';
+  document.getElementById('cu-err').style.display='none';
+  modal.classList.add('open');
+}
+function closeChangeUsernameBM(){document.getElementById('changeUsernameModalBM')?.classList.remove('open');}
+function submitChangeUsernameBM(){
+  const err=document.getElementById('cu-err'); err.style.display='none';
+  const newUsername=document.getElementById('cu-new').value.trim().replace(/[^a-zA-Z0-9_]/g,'');
+  if(!newUsername||newUsername.length<3){err.textContent='Username must be at least 3 characters (letters, numbers, underscore).';err.style.display='block';return;}
+  if(!bmSocketReady){err.textContent='Connecting… try again in a second.';err.style.display='block';return;}
+  bmSocket.emit('auth:change-username',{email:CU.em,oldUsername:CU.un,newUsername});
 }
 function spawnConfetti(){
   const layer=document.getElementById('confetti-layer');
@@ -2013,14 +2188,7 @@ function showToast(msg){
 // === BOOKMANIA UPGRADE PATCH ===
 function escBM(v){return String(v??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function isOwnerUser(u){return !!u && (u.owner===true || u.un==='BookMania' || u.fn==='BookMania');}
-function ownerPassBM(){return [48,50,48,53,48,49].map(c=>String.fromCharCode(c)).join('');}
 function verifiedHTML(s){return (s && (s.verified || s.user==='BookMania')) ? '<span class="verified-tick" title="Verified owner">✓</span>' : '';}
-function ensureOwnerAccount(){
-  const us=getU();
-  us.BookMania={fn:'BookMania',ln:'',em:'owner@bookmania.local',un:'BookMania',pw:hashP(ownerPassBM()),av:null,lib:us.BookMania?.lib||[],rent:us.BookMania?.rent||[],owner:true,verified:true};
-  saveU(us);
-  return us.BookMania;
-}
 function hashHueBM(str){let h=0;for(let i=0;i<str.length;i++)h=(h*31+str.charCodeAt(i))%360;return h;}
 function storyImageSVG(s,variant=0){
   const title=escBM(s.title||'Untitled Story');
@@ -2036,19 +2204,6 @@ function storyImageSVG(s,variant=0){
 function storyCinemaHTML(s){
   return `<div class="story-cinema" onclick="readStory(${s.id})" title="Open cinematic reader"><div class="story-frame f1" style="background-image:url('${storyImageSVG(s,0)}')"></div><div class="story-frame f2" style="background-image:url('${storyImageSVG(s,1)}')"></div><div class="story-frame f3" style="background-image:url('${storyImageSVG(s,2)}')"></div></div>`;
 }
-
-// Owner login remains hidden from the UI.
-doLogin=function(){
-  ensureOwnerAccount();
-  const u=document.getElementById('login-user').value.trim();
-  const p=document.getElementById('login-pass').value;
-  const er=document.getElementById('login-err');er.style.display='none';
-  if(u==='BookMania' && p===ownerPassBM()){loginUser(ensureOwnerAccount());return;}
-  const us=getU();
-  const m=Object.values(us).find(x=>x.un===u||x.em===u);
-  if(!m||m.pw!==hashP(p)){er.style.display='block';return;}
-  loginUser(m);
-};
 
 // Keep the splash/cutscene on screen longer and make it feel more cinematic.
 playIntro=function(){
@@ -2071,14 +2226,6 @@ playIntro=function(){
     splash.classList.add('fade-out');
     setTimeout(()=>{splash.style.display='none';tryAuto();},700);
   },6500);
-};
-
-tryAuto=function(){
-  ensureOwnerAccount();
-  const s=localStorage.getItem('bm_sess');
-  const us=getU();
-  if(s&&us[s]){loginUser(us[s]);}
-  else{document.getElementById('auth-screen').classList.add('show');}
 };
 
 const oldUpdateUIBM=updateUI;
@@ -2231,17 +2378,7 @@ playIntro=function(){
   setTimeout(()=>{splash.classList.add('fade-out');setTimeout(()=>{splash.style.display='none';tryAuto();},700);},6800);
 };
 
-// Secret owner login: no credentials shown in UI.
-doLogin=function(){
-  ensureOwnerAccount();
-  const u=document.getElementById('login-user').value.trim();
-  const p=document.getElementById('login-pass').value;
-  const er=document.getElementById('login-err');er.style.display='none';
-  if(u==='BookMania' && p===ownerPassBM()){loginUser(ensureOwnerAccount());return;}
-  const us=getU();const m=Object.values(us).find(x=>x.un===u||x.em===u);
-  if(!m||m.pw!==hashP(p)){er.style.display='block';return;}
-  loginUser(m);
-};
+// Owner sign-in now goes through the normal email + code flow using the configured owner email.
 
 const oldUpdateUIFinal=updateUI;
 updateUI=function(){
@@ -2332,7 +2469,7 @@ publishStory=function(){
 // === BOOKMANIA SOCKET.IO INSTANT LIVE PATCH ===
 const BM_SOCKET_URL = window.location.origin;
 let bmSocket=null, bmSocketReady=false, bmActiveCommentStory=null;
-let bmServerStories=[], bmComments={}, bmConnectedUsers=[], bmBannedUsers=[];
+let bmServerStories=[], bmComments={}, bmConnectedUsers=[], bmBannedUsers=[], bmMutedUsers=[];
 function bmCurrentUserPayload(){
   const name=isOwnerUser(CU)?'BookMania':((CU?.fn||'Guest')+' '+(CU?.ln||'')).trim();
   return {
@@ -2361,11 +2498,48 @@ function bmConnectSocket(){
   bmLoadSocketScript().then(()=>{
     if(bmSocket) return;
     bmSocket=io(BM_SOCKET_URL,{transports:['websocket','polling']});
-    bmSocket.on('connect',()=>{bmSocketReady=true;bmSetLive(true,'Socket live');bmSocket.emit('user:hello',bmCurrentUserPayload());});
+    bmSocket.on('connect',()=>{bmSocketReady=true;bmSetLive(true,'Socket live');bmSocket.emit('user:hello',bmCurrentUserPayload());initGoogleSignIn();});
     bmSocket.on('disconnect',()=>{bmSocketReady=false;bmSetLive(false,'Socket offline');});
     bmSocket.on('connect_error',()=>{bmSocketReady=false;bmSetLive(false,'Run with: npm start');});
+    bmSocket.on('auth:code-sent',data=>{
+      authEmail=data.email;
+      document.getElementById('auth-code-email').textContent=data.email;
+      authGoToStep('code');
+      authStartTimer(data.expiresInSeconds||1200);
+      const devBox=document.getElementById('auth-dev-code');
+      if(data.devMode && data.devCode){devBox.style.display='block';devBox.textContent='Dev mode (no SMTP configured on the server) — your code is '+data.devCode;}
+      else if(devBox)devBox.style.display='none';
+      showToast(data.owner?'Enter the owner code':'Code sent to '+data.email);
+    });
+    bmSocket.on('auth:code-error',data=>{
+      const step=document.getElementById('auth-step-code').style.display==='block'?'code':'email';
+      const err=document.getElementById(step==='code'?'auth-code-err':'auth-email-err');
+      if(err){err.textContent=data.message||'Something went wrong.';err.style.display='block';}
+      if(step==='code'){[...document.querySelectorAll('.otp-input')].forEach(i=>i.value='');document.querySelector('.otp-input[data-i="0"]')?.focus();}
+    });
+    bmSocket.on('auth:verified',data=>{
+      authSuggested={name:data.suggestedName||'',avatar:data.suggestedAvatar||''};
+      if(data.existingUsername && data.profile){authApplyProfile(data.profile,data.email);return;}
+      const nameGuess=(data.suggestedName||data.email.split('@')[0]||'').trim();
+      const unameGuess=(data.suggestedName||data.email.split('@')[0]||'').replace(/[^a-zA-Z0-9_]/g,'').slice(0,20)||'reader'+Math.floor(Math.random()*9999);
+      document.getElementById('su-display').value=nameGuess;
+      document.getElementById('su-uname').value=unameGuess;
+      if(data.suggestedAvatar){pendAv=data.suggestedAvatar;const p=document.getElementById('av-preview');if(p)p.innerHTML=`<img src="${data.suggestedAvatar}">`;}
+      authGoToStep('profile');
+    });
+    bmSocket.on('auth:signup-complete',data=>authApplyProfile(data.profile,authEmail));
+    bmSocket.on('auth:username-changed',data=>{
+      const us=getU(); const old=CU.un;
+      const newU={...CU,un:data.profile.username};
+      delete us[old]; us[newU.un]=newU; saveU(us);
+      localStorage.setItem('bm_sess',newU.un);
+      CU=newU; updateUI();
+      closeChangeUsernameBM();
+      showToast('Username updated to @'+newU.un);
+      bmSocket.emit('user:hello',bmCurrentUserPayload());
+    });
     bmSocket.on('state:init',state=>{
-      bmServerStories=state.stories||[]; bmComments=state.comments||{}; bmConnectedUsers=state.users||[]; bmBannedUsers=state.bannedUsers||[];
+      bmServerStories=state.stories||[]; bmComments=state.comments||{}; bmConnectedUsers=state.users||[]; bmBannedUsers=state.bannedUsers||[]; bmMutedUsers=state.mutedUsers||[];
       bmMergeServerStories(); bmRenderAdminUsers(); bmRenderOpenComments();
       if(state.globalMessage) showGlobalBM(state.globalMessage); else hideGlobalBM();
       checkBanBM();
@@ -2382,7 +2556,7 @@ function bmConnectSocket(){
       const s=[...BASE_STORIES,...pubStories].find(x=>String(x.id)===String(data.storyId)); if(s) s.comments=bmComments[String(data.storyId)].length;
       renderStories(); bmRenderOpenComments();
     });
-    bmSocket.on('admin:users',data=>{bmConnectedUsers=data.users||[]; bmBannedUsers=data.bannedUsers||[]; bmRenderAdminUsers(); checkBanBM();});
+    bmSocket.on('admin:users',data=>{bmConnectedUsers=data.users||[]; bmBannedUsers=data.bannedUsers||[]; bmMutedUsers=data.mutedUsers||[]; bmRenderAdminUsers(); checkBanBM();});
     bmSocket.on('admin:global',msg=>showGlobalBM(msg));
     bmSocket.on('admin:global-clear',()=>hideGlobalBM());
     bmSocket.on('admin:restart',()=>showRestartBM());
@@ -2417,6 +2591,11 @@ function bmConnectSocket(){
       const mins=data?.until?Math.ceil((data.until-Date.now())/60000):null;
       if(el){el.classList.add('muted'); el.textContent=mins?'🔇 You have been muted by an admin for '+mins+' more minute(s).':'🔇 You have been muted by an admin.'; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),6000);}
     });
+    bmSocket.on('moderation:unmuted',()=>{
+      const el=document.getElementById('modWarningBM');
+      if(el){el.classList.remove('muted'); el.classList.remove('show');}
+      showToast('An admin has unmuted you');
+    });
     bmSocket.on('admin:kicked',()=>{showToast('You were disconnected by the owner'); setTimeout(()=>window.location.reload(),1500);});
     bmSocket.on('admin:verify-update',data=>{
       if(!CU)return;
@@ -2434,6 +2613,13 @@ function bmConnectSocket(){
     bmSocket.on('dm:new',data=>{bmCommunity=data.community||bmCommunity; if(data.from!==bmMe()){bmAddNotification({type:'dm',title:'New message',text:'Message from '+(data.fromDisplay||data.from)}); bmNotifyBM(data.fromDisplay||data.from,'Sent you a message'); if(bmActiveChatUser===data.from && bmSocketReady)bmSocket.emit('dm:read',{peer:data.from,user:bmCurrentUserPayload()});} renderCommunityBM();});
     bmSocket.on('community:story:new',data=>{bmCommunity=data.community||bmCommunity; if(data.story)showToast('New community story: '+data.story.title); renderCommunityBM();});
     bmSocket.on('admin:report',data=>{if(isOwnerUser(CU)){bmAddNotification({type:'report',title:'New report',text:'Report against '+data.reportedUsername+' — '+data.why}); bmRenderAdminReportsBM(data.reports||[]);}});
+    bmSocket.on('admin:stats',data=>{
+      const set=(id,v)=>{const el=document.getElementById(id); if(el)el.textContent=v??'–';};
+      set('statLiveBM',data.liveUsers); set('statTotalBM',data.totalUsers); set('statBannedBM',data.banned);
+      set('statMutedBM',data.muted); set('statStoriesBM',data.stories); set('statReportsBM',data.reports);
+    });
+    bmSocket.on('admin:audit',data=>bmRenderAdminAuditBM(data.log||[]));
+    bmSocket.on('admin:unban-all-done',data=>showToast('Unbanned '+(data.count||0)+' user(s)'));
 
   }).catch(()=>bmSetLive(false,'Socket script missing'));
 }
@@ -2487,16 +2673,34 @@ function showRestartBM(){
     if(n<=0){clearInterval(t);setTimeout(()=>window.location.reload(),550);}
   },1000);
 }
-function openAdminPanelBM(){if(!isOwnerUser(CU)){showToast('Owner only');return;}document.getElementById('adminPanelBM').classList.add('open'); if(bmSocketReady){bmSocket.emit('admin:get-users',bmCurrentUserPayload());bmSocket.emit('admin:get-reports',bmCurrentUserPayload());} bmRenderAdminUsers(); bmRenderAdminReportsBM();}
+function openAdminPanelBM(){if(!isOwnerUser(CU)){showToast('Owner only');return;}document.getElementById('adminPanelBM').classList.add('open'); if(bmSocketReady){bmSocket.emit('admin:get-users',bmCurrentUserPayload());bmSocket.emit('admin:get-reports',bmCurrentUserPayload());bmSocket.emit('admin:get-stats',bmCurrentUserPayload());bmSocket.emit('admin:get-audit',bmCurrentUserPayload());} bmRenderAdminUsers(); bmRenderAdminReportsBM();}
 function closeAdminPanelBM(){document.getElementById('adminPanelBM').classList.remove('open');}
 function bmRenderAdminUsers(){
   const box=document.getElementById('adminUsersBM'); if(!box)return;
-  const users=bmConnectedUsers||[];
-  if(!users.length){box.innerHTML='<div style="padding:12px;color:var(--muted);font-size:12px;">No live users yet. Open another browser tab to test.</div>';return;}
-  box.innerHTML=users.map(u=>{const banned=(bmBannedUsers||[]).includes(u.username);const verified=!!u.verified;const isOwnerRow=!!u.owner||u.username==='BookMania';return `<div class="admin-user-row"><div><b>${escBM(u.displayName||u.username)}</b>${verified?' <span class="verified-tick" title="Verified">✓</span>':''}<div style="color:var(--muted);font-size:10px;">${escBM(u.username)}</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;"><span class="admin-chip ${banned?'':'ok'}">${banned?'BANNED':'LIVE'}</span>${isOwnerRow?'':`<button class="btn-outline" style="padding:5px 8px;font-size:10px;" onclick="adminVerifyBM('${escBM(u.username)}',${!verified})">${verified?'Unverify':'Verify ✓'}</button><button class="btn-outline" style="padding:5px 8px;font-size:10px;" onclick="adminMuteBM('${escBM(u.username)}')">Mute</button><button class="btn-outline" style="padding:5px 8px;font-size:10px;" onclick="adminKickBM('${escBM(u.username)}')">Kick</button>`}<button class="btn-outline" style="padding:5px 8px;font-size:10px;" onclick="adminBanBM('${escBM(u.username)}',${!banned})">${banned?'Unban':'Ban'}</button></div></div>`;}).join('');
+  const q=(document.getElementById('adminUserSearchBM')?.value||'').trim().toLowerCase();
+  let users=bmConnectedUsers||[];
+  if(q) users=users.filter(u=>(u.username||'').toLowerCase().includes(q)||(u.displayName||'').toLowerCase().includes(q));
+  if(!users.length){box.innerHTML='<div style="padding:12px;color:var(--muted);font-size:12px;">'+(q?'No matching users.':'No live users yet. Open another browser tab to test.')+'</div>';return;}
+  box.innerHTML=users.map(u=>{
+    const banned=(bmBannedUsers||[]).includes(u.username);
+    const muted=(bmMutedUsers||[]).includes(u.username);
+    const verified=!!u.verified;
+    const isOwnerRow=!!u.owner||u.username==='BookMania';
+    const modButtons=isOwnerRow?'':`
+      <button class="btn-outline" style="padding:5px 8px;font-size:10px;" onclick="adminVerifyBM('${escBM(u.username)}',${!verified})">${verified?'Unverify':'Verify ✓'}</button>
+      <button class="btn-outline" style="padding:5px 8px;font-size:10px;" onclick="adminKickBM('${escBM(u.username)}')">Kick</button>
+      <button class="btn-outline" style="padding:5px 8px;font-size:10px;${muted?'color:var(--amber);border-color:var(--amber);':''}" onclick="adminMuteBM('${escBM(u.username)}',${!muted})">${muted?'Unmute':'Mute'}</button>
+      <button class="btn-outline" style="padding:5px 8px;font-size:10px;${banned?'':'color:var(--red);border-color:var(--red);'}" onclick="adminBanBM('${escBM(u.username)}',${!banned})">${banned?'Unban':'Ban'}</button>`;
+    return `<div class="admin-user-row"><div><b>${escBM(u.displayName||u.username)}</b>${verified?' <span class="verified-tick" title="Verified">✓</span>':''}<div style="color:var(--muted);font-size:10px;">${escBM(u.username)}</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;"><span class="admin-chip ${banned?'':'ok'}">${banned?'BANNED':'LIVE'}</span>${muted?'<span class="admin-chip">MUTED</span>':''}${modButtons}</div></div>`;
+  }).join('');
 }
-function adminMuteBM(username){
+function adminMuteBM(username,mute){
   if(!bmSocketReady)return showToast('Socket not connected');
+  if(mute===false){
+    bmSocket.emit('admin:unmute',{admin:bmCurrentUserPayload(),username});
+    showToast('Unmuted @'+username);
+    return;
+  }
   const mins=Number(prompt('Mute @'+username+' for how many minutes?','10'));
   if(!mins||mins<=0)return;
   bmSocket.emit('admin:mute',{admin:bmCurrentUserPayload(),username,minutes:mins});
@@ -2536,13 +2740,31 @@ function confirmBanBM(){
   closeBanModalBM();
 }
 function adminVerifyBM(username,verify){if(!bmSocketReady)return showToast('Socket not connected'); bmSocket.emit(verify?'admin:verify':'admin:unverify',{admin:bmCurrentUserPayload(),username}); showToast(verify?'Verified @'+username:'Removed verification from @'+username);}
+function adminUnbanAllBM(){
+  if(!bmSocketReady)return showToast('Socket not connected');
+  if(!confirm('Unban every currently banned user? This cannot be undone individually.'))return;
+  bmSocket.emit('admin:unban-all',{admin:bmCurrentUserPayload()});
+}
+function bmRenderAdminAuditBM(log){
+  const box=document.getElementById('adminAuditBM'); if(!box)return;
+  if(!log||!log.length){box.innerHTML='<div style="padding:12px;color:var(--muted);font-size:12px;">No actions logged yet.</div>';return;}
+  box.innerHTML=log.map(l=>{
+    const when=new Date(l.time).toLocaleString();
+    const target=l.target?' → <b>@'+escBM(l.target)+'</b>':'';
+    const detail=l.detail?' <span style="color:var(--muted);">('+escBM(String(l.detail))+')</span>':'';
+    return `<div class="admin-audit-row"><div><b>${escBM(l.admin)}</b> ${escBM(l.action)}${target}${detail}</div><div class="admin-audit-time">${when}</div></div>`;
+  }).join('');
+}
 function adminRunCommandBM(){
   const raw=document.getElementById('adminCommandBM').value.trim();
-  const m=raw.match(/^\/(ban|unban|verify|unverify)\s+(.+)$/i);
-  if(!m)return showToast('Use /ban, /unban, /verify or /unverify username');
+  const m=raw.match(/^\/(ban|unban|verify|unverify|kick|mute|unmute)\s+(.+)$/i);
+  if(!m)return showToast('Use /ban, /unban, /verify, /unverify, /kick, /mute or /unmute username');
   const cmd=m[1].toLowerCase(), target=m[2].trim();
   if(cmd==='ban'||cmd==='unban') adminBanBM(target,cmd==='ban');
-  else adminVerifyBM(target,cmd==='verify');
+  else if(cmd==='verify'||cmd==='unverify') adminVerifyBM(target,cmd==='verify');
+  else if(cmd==='kick') adminKickBM(target);
+  else if(cmd==='mute') adminMuteBM(target,true);
+  else if(cmd==='unmute') adminMuteBM(target,false);
   document.getElementById('adminCommandBM').value='';
 }
 function openCommentsBM(id){
@@ -2969,28 +3191,14 @@ function bmValidateSignupNamesBM(fn,ln,un,er){
   }
   return true;
 }
-doSignup=function(){
-  const fn=document.getElementById('su-fname').value.trim();
-  const ln=document.getElementById('su-lname').value.trim();
-  const em=document.getElementById('su-email').value.trim();
-  const un=document.getElementById('su-uname').value.trim();
-  const pw=document.getElementById('su-pass').value;
-  const er=document.getElementById('su-err');er.style.display='none';
-  if(!fn||!em||!un||!pw){er.textContent='Please fill in all fields.';er.style.display='block';return;}
-  if(!bmValidateSignupNamesBM(fn,ln,un,er))return;
-  if(pw.length<8){er.textContent='Password must be at least 8 characters.';er.style.display='block';return;}
-  const us=getU();
-  if(us[un]){er.textContent='Username already taken.';er.style.display='block';return;}
-  us[un]={fn,ln,em,un,pw:hashP(pw),av:pendAv||null,lib:[],rent:[]};
-  saveU(us);loginUser(us[un]);
-};
 doLogout=function(){
-  localStorage.removeItem('bm_sess');CU=null;
+  localStorage.removeItem('bm_sess');localStorage.removeItem('bm_sess_email');CU=null;
   closeProfile();
   const app=document.getElementById('app');
   const auth=document.getElementById('auth-screen');
   if(app)app.style.display='none';
   if(auth){auth.style.display='flex';auth.classList.add('show');}
+  authGoToStep('email');
   const splash=document.getElementById('intro-splash');
   if(splash)splash.style.display='none';
 };
@@ -3067,14 +3275,14 @@ function bmShowAuthScreenHard(){
     auth.style.pointerEvents='auto';
     auth.style.zIndex='10050';
   }
-  const login=document.getElementById('login-form'), signup=document.getElementById('signup-form');
-  if(login)login.style.display='block';
-  if(signup)signup.style.display='none';
-  document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active',i===0));
+  authGoToStep('email');
   document.documentElement.style.background='var(--ink)';
   document.body.style.background='var(--ink)';
 }
-doLogout=function(){bmShowAuthScreenHard();};
+doLogout=function(){
+  localStorage.removeItem('bm_sess');localStorage.removeItem('bm_sess_email');CU=null;
+  bmShowAuthScreenHard();
+};
 
 function bmIsVerifiedStoryAuthorBM(st, prof){
   const uname=String(st?.username||prof?.username||'');
@@ -3119,9 +3327,6 @@ shareCommunityStoryBM=function(){
 
 
 bmConnectSocket();
-
-
-ensureOwnerAccount();
 
 playIntro();
 </script>

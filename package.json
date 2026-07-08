@@ -1,16 +1,15 @@
 {
-  "name": "bookmania-live-socketio",
+  "name": "bookmania",
   "version": "1.0.0",
-  "main": "bookmania-server.js",
+  "private": true,
   "scripts": {
-    "start": "node bookmania-server.js",
-    "dev": "nodemon bookmania-server.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.19.2",
     "socket.io": "^4.7.5"
   },
-  "devDependencies": {
-    "nodemon": "^3.1.4"
+  "optionalDependencies": {
+    "nodemailer": "^6.9.13"
   }
 }
