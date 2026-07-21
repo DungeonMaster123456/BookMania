@@ -1,12 +1,13 @@
 const express = require('express');
 const http = require('http');
+const https = require('https');
 const path = require('path');
 const fs = require('fs');
 const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' }, maxHttpBufferSize: 2e6 });
+const io = new Server(server, { cors: { origin: '*' }, maxHttpBufferSize: 8e6 });
 
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(__dirname, 'bookmania-live-data.json');
@@ -20,6 +21,7 @@ let state = {
   mutes: {},
   globalMessage: '',
   profiles: {},
+  classicsCache: {},
   community: {
     friendships: {},
     friendRequests: [],
@@ -71,6 +73,7 @@ function normalizeState() {
   state.comments = state.comments && typeof state.comments === 'object' ? state.comments : {};
   state.bans = state.bans && typeof state.bans === 'object' ? state.bans : {};
   state.mutes = state.mutes && typeof state.mutes === 'object' ? state.mutes : {};
+  state.classicsCache = state.classicsCache && typeof state.classicsCache === 'object' ? state.classicsCache : {};
   if (Array.isArray(state.bannedUsers)) {
     state.bannedUsers.forEach(u => {
       if (u && !state.bans[u]) state.bans[u] = { reason: 'Legacy ban', until: null, bannedAt: Date.now(), by: OWNER_USERNAME };
@@ -217,6 +220,92 @@ function cleanStory(story, user, restored = false) {
 function dmKey(a, b) { return [a, b].sort().join('::'); }
 function addUnique(list, item) { if (!list.includes(item)) list.push(item); }
 function removeFrom(list, item) { return (list || []).filter(x => x !== item); }
+
+const BOOKS_CACHE_DIR = path.join(__dirname, 'books-cache');
+if (!fs.existsSync(BOOKS_CACHE_DIR)) fs.mkdirSync(BOOKS_CACHE_DIR, { recursive: true });
+
+function fetchURL(url, redirects = 5, timeoutMs = 15000) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, {
+      headers: {
+        // Honest UA identifying our own app, not impersonating gutenberg.org.
+        // Some hosts (Gutendex/Cloudflare) reject requests that spoof a UA
+        // claiming to be a domain they don't recognise as the requester.
+        'User-Agent': 'BookMania/1.0 (+https://github.com/bookmania)',
+        'Accept': 'application/json, text/plain, */*'
+      },
+      timeout: timeoutMs
+    }, res => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirects > 0) {
+        res.resume();
+        return resolve(fetchURL(new URL(res.headers.location, url).toString(), redirects - 1, timeoutMs));
+      }
+      if (res.statusCode !== 200) {
+        let errBody = '';
+        res.setEncoding('utf8');
+        res.on('data', c => { errBody += c; });
+        res.on('end', () => {
+          reject(new Error('HTTP ' + res.statusCode + ' for ' + url + (errBody ? ' — ' + errBody.slice(0, 200) : '')));
+        });
+        return;
+      }
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', c => { data += c; });
+      res.on('end', () => resolve(data));
+    });
+    req.on('timeout', () => { req.destroy(new Error('Request timed out after ' + timeoutMs + 'ms: ' + url)); });
+    req.on('error', reject);
+  });
+}
+function stripGutenbergBoilerplate(text) {
+  const startMatch = text.match(/\*\*\*\s*START OF (THE|THIS) PROJECT GUTENBERG EBOOK[^\n]*\*\*\*/i);
+  const endMatch = text.match(/\*\*\*\s*END OF (THE|THIS) PROJECT GUTENBERG EBOOK[^\n]*\*\*\*/i);
+  const start = startMatch ? startMatch.index + startMatch[0].length : 0;
+  const end = endMatch ? endMatch.index : text.length;
+  return text.slice(start, end).trim();
+}
+async function getGutenbergText(id) {
+  const cacheFile = path.join(BOOKS_CACHE_DIR, id + '.txt');
+  if (fs.existsSync(cacheFile)) return fs.readFileSync(cacheFile, 'utf8');
+  const urls = [
+    `https://www.gutenberg.org/cache/epub/${id}/pg${id}.txt`,
+    `https://www.gutenberg.org/files/${id}/${id}-0.txt`,
+    `https://www.gutenberg.org/files/${id}/${id}.txt`
+  ];
+  let raw = null, lastErr = null;
+  for (const u of urls) {
+    try { raw = await fetchURL(u); if (raw && raw.length > 500) break; raw = null; } catch (e) { lastErr = e; }
+  }
+  if (!raw) throw lastErr || new Error('Could not fetch book text from Project Gutenberg');
+  const clean = stripGutenbergBoilerplate(raw);
+  fs.writeFileSync(cacheFile, clean, 'utf8');
+  return clean;
+}
+async function searchGutendex(query) {
+  const url = `https://gutendex.com/books/?search=${encodeURIComponent(query)}`;
+  let raw;
+  try {
+    raw = await fetchURL(url);
+  } catch (e) {
+    console.error('[gutendex] request failed:', e.message);
+    throw e;
+  }
+  let json;
+  try {
+    json = JSON.parse(raw);
+  } catch (e) {
+    console.error('[gutendex] non-JSON response (first 200 chars):', raw.slice(0, 200));
+    throw new Error('Gutendex returned unparseable response');
+  }
+  return (json.results || []).filter(b => b.formats && (b.formats['text/plain; charset=utf-8'] || b.formats['text/plain'])).slice(0, 24).map(b => ({
+    id: b.id,
+    title: b.title,
+    authors: (b.authors || []).map(a => a.name).join(', ') || 'Unknown',
+    subjects: (b.subjects || []).slice(0, 3),
+    cover: (b.formats && b.formats['image/jpeg']) || null
+  }));
+}
 
 loadState();
 
@@ -470,6 +559,34 @@ io.on('connection', socket => {
     const idx = story.reactions[emoji].indexOf(me.username);
     if (idx === -1) story.reactions[emoji].push(me.username); else story.reactions[emoji].splice(idx, 1);
     saveState(); emitCommunityState();
+  });
+
+  socket.on('gutenberg:search', async data => {
+    const q = safeText(data?.query, 100);
+    if (!q) return socket.emit('gutenberg:results', []);
+    try {
+      const results = await searchGutendex(q);
+      socket.emit('gutenberg:results', results);
+    } catch (e) {
+      socket.emit('gutenberg:results', []);
+      socket.emit('gutenberg:error', 'Search failed. Try again in a moment.');
+    }
+  });
+
+  socket.on('gutenberg:read', async data => {
+    const id = Number(data?.id);
+    const title = safeText(data?.title, 200) || 'Untitled';
+    const author = safeText(data?.author, 120) || 'Unknown';
+    if (!id) return;
+    socket.emit('gutenberg:loading', { id });
+    try {
+      const text = await getGutenbergText(id);
+      state.classicsCache[id] = { title, author, cachedAt: Date.now(), chars: text.length };
+      saveState();
+      socket.emit('gutenberg:text', { id, title, author, text });
+    } catch (e) {
+      socket.emit('gutenberg:error', 'Could not fetch "' + title + '" from Project Gutenberg. Try another book.');
+    }
   });
 
   socket.on('friend:request', data => {
