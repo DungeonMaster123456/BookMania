@@ -224,19 +224,38 @@ function removeFrom(list, item) { return (list || []).filter(x => x !== item); }
 const BOOKS_CACHE_DIR = path.join(__dirname, 'books-cache');
 if (!fs.existsSync(BOOKS_CACHE_DIR)) fs.mkdirSync(BOOKS_CACHE_DIR, { recursive: true });
 
-function fetchURL(url, redirects = 5) {
+function fetchURL(url, redirects = 5, timeoutMs = 15000) {
   return new Promise((resolve, reject) => {
-    https.get(url, { headers: { 'User-Agent': 'BookMania/1.0 (+https://gutenberg.org)' } }, res => {
+    const req = https.get(url, {
+      headers: {
+        // Honest UA identifying our own app, not impersonating gutenberg.org.
+        // Some hosts (Gutendex/Cloudflare) reject requests that spoof a UA
+        // claiming to be a domain they don't recognise as the requester.
+        'User-Agent': 'BookMania/1.0 (+https://github.com/bookmania)',
+        'Accept': 'application/json, text/plain, */*'
+      },
+      timeout: timeoutMs
+    }, res => {
       if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirects > 0) {
         res.resume();
-        return resolve(fetchURL(new URL(res.headers.location, url).toString(), redirects - 1));
+        return resolve(fetchURL(new URL(res.headers.location, url).toString(), redirects - 1, timeoutMs));
       }
-      if (res.statusCode !== 200) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
+      if (res.statusCode !== 200) {
+        let errBody = '';
+        res.setEncoding('utf8');
+        res.on('data', c => { errBody += c; });
+        res.on('end', () => {
+          reject(new Error('HTTP ' + res.statusCode + ' for ' + url + (errBody ? ' — ' + errBody.slice(0, 200) : '')));
+        });
+        return;
+      }
       let data = '';
       res.setEncoding('utf8');
       res.on('data', c => { data += c; });
       res.on('end', () => resolve(data));
-    }).on('error', reject);
+    });
+    req.on('timeout', () => { req.destroy(new Error('Request timed out after ' + timeoutMs + 'ms: ' + url)); });
+    req.on('error', reject);
   });
 }
 function stripGutenbergBoilerplate(text) {
@@ -264,8 +283,21 @@ async function getGutenbergText(id) {
   return clean;
 }
 async function searchGutendex(query) {
-  const raw = await fetchURL(`https://gutendex.com/books/?search=${encodeURIComponent(query)}`);
-  const json = JSON.parse(raw);
+  const url = `https://gutendex.com/books/?search=${encodeURIComponent(query)}`;
+  let raw;
+  try {
+    raw = await fetchURL(url);
+  } catch (e) {
+    console.error('[gutendex] request failed:', e.message);
+    throw e;
+  }
+  let json;
+  try {
+    json = JSON.parse(raw);
+  } catch (e) {
+    console.error('[gutendex] non-JSON response (first 200 chars):', raw.slice(0, 200));
+    throw new Error('Gutendex returned unparseable response');
+  }
   return (json.results || []).filter(b => b.formats && (b.formats['text/plain; charset=utf-8'] || b.formats['text/plain'])).slice(0, 24).map(b => ({
     id: b.id,
     title: b.title,
