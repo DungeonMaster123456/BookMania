@@ -608,6 +608,20 @@ input,textarea,select{font-family:var(--fn);}
 .chat-header-extra button{background:var(--card);border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:6px 9px;font-size:10px;font-weight:700;transition:border-color .15s ease,color .15s ease;}
 .chat-header-extra button:hover{border-color:var(--red);color:var(--red);}
 
+/* Gutenberg panel */
+.gutenberg-panel{margin-top:32px;background:linear-gradient(180deg,var(--panel),rgba(22,25,32,.7));border:1px solid var(--border);border-radius:16px;padding:22px;}
+.gutenberg-panel h3{color:var(--cream);font-size:16px;margin-bottom:6px;}
+.gutenberg-sub{color:var(--muted);font-size:12px;line-height:1.6;max-width:640px;}
+.gutenberg-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;margin-top:6px;}
+.gutenberg-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px;display:flex;gap:10px;transition:transform .18s ease,border-color .18s ease;animation:bmFadeUp .25s ease both;}
+.gutenberg-card:hover{transform:translateY(-2px);border-color:rgba(233,168,76,.35);}
+.gutenberg-cover{width:44px;height:62px;border-radius:6px;flex:none;background:var(--panel);background-size:cover;background-position:center;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:18px;}
+.gutenberg-info{flex:1;min-width:0;}
+.gutenberg-title{font-size:12.5px;font-weight:700;color:var(--cream);line-height:1.3;margin-bottom:3px;}
+.gutenberg-author{font-size:10.5px;color:var(--muted);margin-bottom:8px;}
+.gutenberg-read-btn{background:var(--amber);color:#1a1206;border:none;border-radius:8px;padding:6px 10px;font-size:10.5px;font-weight:800;width:100%;transition:transform .15s ease;}
+.gutenberg-read-btn:hover{transform:translateY(-1px);}
+
 </style>
 </head>
 <body>
@@ -789,6 +803,16 @@ input,textarea,select{font-family:var(--fn);}
   </div>
   <div class="bgrid" id="browse-grid"></div>
   <div style="text-align:center;margin-top:24px;"><button class="btn-outline" id="load-more-btn" onclick="loadMore()">Load More</button></div>
+
+  <div class="gutenberg-panel">
+    <h3>📖 Project Gutenberg — 70,000+ Free Public Domain Books</h3>
+    <p class="gutenberg-sub">Search the full Project Gutenberg library and read any out-of-copyright classic in full, for free. Text is fetched live from gutenberg.org through the BookMania server.</p>
+    <div style="display:flex;gap:8px;margin:12px 0;">
+      <input class="finput" id="gutenbergSearchInputBM" placeholder="Search by title or author (e.g. Jules Verne, Little Women)..." onkeydown="if(event.key==='Enter')searchGutenbergBM()">
+      <button class="btn-primary" onclick="searchGutenbergBM()" style="white-space:nowrap;">Search</button>
+    </div>
+    <div id="gutenbergResultsBM" class="gutenberg-results"></div>
+  </div>
 </section>
 
 <!-- SEE -->
@@ -1202,18 +1226,18 @@ const BOOKS=[
   {id:1,title:"Harry Potter and the Philosopher's Stone",author:"J.K. Rowling",price:349,rent:59,genre:"fantasy",desc:"A young boy discovers he is a wizard and is invited to attend Hogwarts School of Witchcraft and Wizardry. An extraordinary journey of friendship, courage, and the battle between good and evil.",isFree:false,isNew:true,isBest:true},
   {id:2,title:"To Kill a Mockingbird",author:"Harper Lee",price:299,rent:49,genre:"classic",desc:"Set in the American South during the 1930s, a young girl watches her father defend a Black man wrongfully accused of a crime. A profound novel about racial injustice and moral courage.",isFree:true,isBest:true},
   {id:3,title:"1984",author:"George Orwell",price:279,rent:45,genre:"sci-fi",desc:"In a totalitarian future society, Winston Smith seeks to rebel against the all-watching Party. A chilling and enduring warning about the dangers of absolute power.",isFree:false,isBest:true},
-  {id:4,title:"Pride and Prejudice",author:"Jane Austen",price:249,rent:39,genre:"classic",desc:"Elizabeth Bennet and the proud Mr. Darcy must overcome prejudice and misunderstanding to find love. A witty and romantic masterpiece of English literature.",isFree:true},
-  {id:5,title:"The Great Gatsby",author:"F. Scott Fitzgerald",price:259,rent:42,genre:"classic",desc:"Jay Gatsby's obsessive pursuit of his lost love Daisy in 1920s New York. A dazzling portrait of the American Dream and the tragedy that lies at its heart.",isFree:true},
+  {id:4,title:"Pride and Prejudice",author:"Jane Austen",price:249,rent:39,genre:"classic",desc:"Elizabeth Bennet and the proud Mr. Darcy must overcome prejudice and misunderstanding to find love. A witty and romantic masterpiece of English literature.",isFree:true,gutenbergId:1342},
+  {id:5,title:"The Great Gatsby",author:"F. Scott Fitzgerald",price:259,rent:42,genre:"classic",desc:"Jay Gatsby's obsessive pursuit of his lost love Daisy in 1920s New York. A dazzling portrait of the American Dream and the tragedy that lies at its heart.",isFree:true,gutenbergId:64317},
   {id:6,title:"Dune",author:"Frank Herbert",price:449,rent:75,genre:"sci-fi",desc:"On the desert planet Arrakis, young Paul Atreides must navigate politics, religion, and survival to claim his destiny. The defining epic of science fiction.",isFree:false,isPrem:true,isBest:true},
   {id:7,title:"The Hitchhiker's Guide to the Galaxy",author:"Douglas Adams",price:299,rent:49,genre:"sci-fi",desc:"After Earth is demolished for a hyperspace bypass, Arthur Dent is swept into a mad journey across the universe with his alien friend Ford Prefect. Brilliantly funny.",isFree:false},
   {id:8,title:"The Lord of the Rings",author:"J.R.R. Tolkien",price:549,rent:89,genre:"fantasy",desc:"The fellowship must destroy the One Ring to save Middle-earth from Sauron. The foundational work of modern high fantasy, unmatched in scope and world-building.",isFree:false,isBest:true,isPrem:true},
-  {id:9,title:"Crime and Punishment",author:"Fyodor Dostoevsky",price:319,rent:52,genre:"classic",desc:"A student murders a pawnbroker and must confront the weight of his own conscience. A monumental psychological exploration of guilt, suffering, and redemption.",isFree:true},
+  {id:9,title:"Crime and Punishment",author:"Fyodor Dostoevsky",price:319,rent:52,genre:"classic",desc:"A student murders a pawnbroker and must confront the weight of his own conscience. A monumental psychological exploration of guilt, suffering, and redemption.",isFree:true,gutenbergId:2554},
   {id:10,title:"The Catcher in the Rye",author:"J.D. Salinger",price:279,rent:45,genre:"fiction",desc:"Holden Caulfield's days wandering New York City after expulsion from prep school. A landmark of teenage alienation, voice, and rebellion that still resonates.",isFree:false},
   {id:11,title:"Brave New World",author:"Aldous Huxley",price:289,rent:47,genre:"sci-fi",desc:"In a genetically engineered future, one man dares to question the comfortable emptiness of the World State. A classic and eerily prescient dystopian vision.",isFree:false},
   {id:12,title:"The Alchemist",author:"Paulo Coelho",price:299,rent:49,genre:"fiction",desc:"A shepherd boy journeys from Spain to Egypt's pyramids following a recurring dream of treasure, learning along the way that the journey is itself the destination.",isFree:false,isBest:true},
   {id:13,title:"Gone Girl",author:"Gillian Flynn",price:329,rent:54,genre:"thriller",desc:"On their fifth wedding anniversary, Nick Dunne's wife Amy mysteriously disappears. A dark and twisty dissection of marriage, media, and the stories we tell about ourselves.",isFree:false,isNew:true},
   {id:14,title:"The Da Vinci Code",author:"Dan Brown",price:349,rent:58,genre:"thriller",desc:"Harvard symbologist Robert Langdon is drawn into a deadly conspiracy involving a murder at the Louvre and a secret society protecting a world-altering truth.",isFree:false,isBest:true},
-  {id:15,title:"Sherlock Holmes: A Study in Scarlet",author:"Arthur Conan Doyle",price:199,rent:32,genre:"mystery",desc:"The very first appearance of Sherlock Holmes and Dr. Watson, as they investigate a mysterious murder in London that leads them across continents.",isFree:true},
+  {id:15,title:"Sherlock Holmes: A Study in Scarlet",author:"Arthur Conan Doyle",price:199,rent:32,genre:"mystery",desc:"The very first appearance of Sherlock Holmes and Dr. Watson, as they investigate a mysterious murder in London that leads them across continents.",isFree:true,gutenbergId:244},
   {id:16,title:"The Silent Patient",author:"Alex Michaelides",price:329,rent:54,genre:"mystery",desc:"Famous painter Alicia Berenson shoots her husband five times and never speaks again. Psychotherapist Theo Faber becomes obsessed with uncovering her motive.",isFree:false,isNew:true,isBest:true},
   {id:17,title:"It",author:"Stephen King",price:429,rent:70,genre:"horror",desc:"In the town of Derry, Maine, a group of children face an ancient evil that takes the form of their deepest fears — most often as the terrifying Pennywise the Dancing Clown.",isFree:false,isPrem:true},
   {id:18,title:"The Shining",author:"Stephen King",price:369,rent:60,genre:"horror",desc:"A recovering alcoholic takes a job as winter caretaker of the isolated Overlook Hotel, where the supernatural forces within begin to unravel his mind and endanger his family.",isFree:false},
@@ -1241,14 +1265,14 @@ const BOOKS=[
   {id:40,title:"Think Again",author:"Adam Grant",price:359,rent:58,genre:"non-fiction",desc:"Organizational psychologist Adam Grant makes the case for the surprising power of not knowing — and how rethinking and intellectual humility can transform our decisions.",isFree:false},
   {id:41,title:"The Remains of the Day",author:"Kazuo Ishiguro",price:279,rent:45,genre:"classic",desc:"An aging English butler takes a rare motoring trip through the countryside, reflecting on decades of service — and the personal sacrifices made in the name of dignity.",isFree:true},
   {id:42,title:"Rebecca",author:"Daphne du Maurier",price:289,rent:47,genre:"mystery",desc:"The unnamed narrator is haunted by the lingering presence of her husband's first wife at their estate of Manderley. A gothic masterpiece of atmosphere and dread.",isFree:true},
-  {id:43,title:"The Count of Monte Cristo",author:"Alexandre Dumas",price:399,rent:65,genre:"classic",desc:"Edmond Dantes escapes wrongful imprisonment and returns disguised as the wealthy Count of Monte Cristo to exact patient, elaborate revenge on those who betrayed him.",isFree:true},
-  {id:44,title:"Moby Dick",author:"Herman Melville",price:249,rent:39,genre:"classic",desc:"Captain Ahab's obsessive, self-destructive quest to hunt the white whale Moby Dick. A vast, strange, and monumental American novel about obsession and the sea.",isFree:true},
-  {id:45,title:"Anna Karenina",author:"Leo Tolstoy",price:329,rent:54,genre:"classic",desc:"Anna Karenina abandons her husband and son for a passionate affair with Count Vronsky in nineteenth-century Russian society. Tolstoy's most devastating and human novel.",isFree:true},
-  {id:46,title:"The Picture of Dorian Gray",author:"Oscar Wilde",price:219,rent:35,genre:"classic",desc:"A beautiful young man sells his soul so that his portrait will age instead of him, allowing him to pursue a life of hedonism without outward consequence.",isFree:true},
-  {id:47,title:"Wuthering Heights",author:"Emily Bronte",price:239,rent:38,genre:"classic",desc:"The violent, passionate love story between Heathcliff and Catherine Earnshaw set against the wild Yorkshire moors. Wildly romantic and profoundly dark.",isFree:true},
-  {id:48,title:"Jane Eyre",author:"Charlotte Bronte",price:249,rent:39,genre:"classic",desc:"Orphaned Jane Eyre becomes governess at Thornfield Hall and falls in love with the brooding Rochester — until she discovers the terrible secret locked in his attic.",isFree:true},
-  {id:49,title:"Dracula",author:"Bram Stoker",price:219,rent:35,genre:"horror",desc:"Count Dracula moves from Transylvania to England to spread his undead curse, while a small band of vampire hunters race to stop him. The definitive vampire novel.",isFree:true},
-  {id:50,title:"Frankenstein",author:"Mary Shelley",price:219,rent:35,genre:"horror",desc:"Scientist Victor Frankenstein creates life from dead matter and is horrified by his creation. A foundational text of science fiction about ambition, responsibility, and what it means to be human.",isFree:true},
+  {id:43,title:"The Count of Monte Cristo",author:"Alexandre Dumas",price:399,rent:65,genre:"classic",desc:"Edmond Dantes escapes wrongful imprisonment and returns disguised as the wealthy Count of Monte Cristo to exact patient, elaborate revenge on those who betrayed him.",isFree:true,gutenbergId:1184},
+  {id:44,title:"Moby Dick",author:"Herman Melville",price:249,rent:39,genre:"classic",desc:"Captain Ahab's obsessive, self-destructive quest to hunt the white whale Moby Dick. A vast, strange, and monumental American novel about obsession and the sea.",isFree:true,gutenbergId:2701},
+  {id:45,title:"Anna Karenina",author:"Leo Tolstoy",price:329,rent:54,genre:"classic",desc:"Anna Karenina abandons her husband and son for a passionate affair with Count Vronsky in nineteenth-century Russian society. Tolstoy's most devastating and human novel.",isFree:true,gutenbergId:1399},
+  {id:46,title:"The Picture of Dorian Gray",author:"Oscar Wilde",price:219,rent:35,genre:"classic",desc:"A beautiful young man sells his soul so that his portrait will age instead of him, allowing him to pursue a life of hedonism without outward consequence.",isFree:true,gutenbergId:174},
+  {id:47,title:"Wuthering Heights",author:"Emily Bronte",price:239,rent:38,genre:"classic",desc:"The violent, passionate love story between Heathcliff and Catherine Earnshaw set against the wild Yorkshire moors. Wildly romantic and profoundly dark.",isFree:true,gutenbergId:768},
+  {id:48,title:"Jane Eyre",author:"Charlotte Bronte",price:249,rent:39,genre:"classic",desc:"Orphaned Jane Eyre becomes governess at Thornfield Hall and falls in love with the brooding Rochester — until she discovers the terrible secret locked in his attic.",isFree:true,gutenbergId:1260},
+  {id:49,title:"Dracula",author:"Bram Stoker",price:219,rent:35,genre:"horror",desc:"Count Dracula moves from Transylvania to England to spread his undead curse, while a small band of vampire hunters race to stop him. The definitive vampire novel.",isFree:true,gutenbergId:345},
+  {id:50,title:"Frankenstein",author:"Mary Shelley",price:219,rent:35,genre:"horror",desc:"Scientist Victor Frankenstein creates life from dead matter and is horrified by his creation. A foundational text of science fiction about ambition, responsibility, and what it means to be human.",isFree:true,gutenbergId:84},
   {id:51,title:"All the Light We Cannot See",author:"Anthony Doerr",price:359,rent:59,genre:"fiction",desc:"A blind French girl and a German boy's paths converge in occupied France during World War II. A Pulitzer Prize-winning novel of lyrical beauty and devastating emotional power.",isFree:false,isBest:true},
   {id:52,title:"The Handmaid's Tale",author:"Margaret Atwood",price:319,rent:52,genre:"sci-fi",desc:"In the totalitarian Republic of Gilead, fertile women are forced to bear children for the ruling class. A chilling, prescient feminist dystopia that feels closer every year.",isFree:false,isBest:true},
   {id:53,title:"Circe",author:"Madeline Miller",price:319,rent:52,genre:"fantasy",desc:"The witchcraft-wielding daughter of Helios carves out a life among gods and monsters on a remote island, learning the full cost of power and the meaning of love.",isFree:false,isNew:true},
@@ -1480,7 +1504,7 @@ document.addEventListener('click',e=>{
 });
 
 // INIT
-function initApp(){renderHomeScrolls();renderBrowse();renderStories();renderLibrary();}
+function initApp(){renderHomeScrolls();renderBrowse();renderStories();renderLibrary();renderGutenbergResultsBM();}
 
 // COVERS — use Open Library cover images where available
 const BOOK_COVERS={
@@ -1666,15 +1690,17 @@ function openBook(id){
   document.getElementById('m-cover').innerHTML='<div style="width:130px;height:183px;border-radius:10px;overflow:hidden;position:relative;">'+mkCov(b,130,183)+'</div>';
   document.getElementById('m-title').textContent=b.title;
   document.getElementById('m-author').textContent='by '+b.author;
-  document.getElementById('m-price').textContent=b.isFree?'Free — Read anytime':'Rs.'+b.price+'  ·  Rent Rs.'+b.rent+'/week';
-  document.getElementById('m-tags').innerHTML=`<div class="tag">${b.genre}</div>${b.isPrem?'<div class="tag">Premium</div>':''}${b.isNew?'<div class="tag">New</div>':''}`;
+  document.getElementById('m-price').textContent=b.gutenbergId?'Public domain — full book free to read':(b.isFree?'Free — Read anytime':'Rs.'+b.price+'  ·  Rent Rs.'+b.rent+'/week');
+  document.getElementById('m-tags').innerHTML=`<div class="tag">${b.genre}</div>${b.gutenbergId?'<div class="tag" style="color:var(--green);border-color:rgba(61,220,132,.35);">📖 Project Gutenberg</div>':''}${b.isPrem?'<div class="tag">Premium</div>':''}${b.isNew?'<div class="tag">New</div>':''}`;
   const ac=document.getElementById('m-actions');
-  if(owned){
+  if(b.gutenbergId){
+    ac.innerHTML=`<button class="btn-buy" onclick="readBook(${id})">Read Full Book Free</button><button class="btn-listen" onclick="listenBook(${id})">Listen</button>`;
+  }else if(owned){
     ac.innerHTML=`<button class="btn-buy" onclick="readBook(${id})">Read Now</button><button class="btn-listen" onclick="listenBook(${id})">Listen</button>`;
   }else{
     ac.innerHTML=`<button class="btn-buy" onclick="buyBook(${id})">Buy Rs.${b.price}</button><button class="btn-rent" onclick="rentBook(${id})">Rent Rs.${b.rent}</button><button class="btn-preview" onclick="readBook(${id},true)">Preview</button><button class="btn-listen" onclick="listenBook(${id})">Listen</button>`;
   }
-  document.getElementById('m-desc').textContent=b.desc;
+  document.getElementById('m-desc').textContent=b.desc+(b.gutenbergId?' This edition is in the public domain and is fetched in full, free to read, from Project Gutenberg.':'');
   const aiEl=document.getElementById('ai-txt');aiEl.textContent='';
   const aiText=owned
     ?`"${b.title}" by ${b.author} rewards careful reading. This ${b.genre} operates on multiple levels simultaneously — the surface narrative and a deeper thematic argument about ${b.genre==='mystery'?'truth, guilt, and the stories we construct to live with ourselves':b.genre==='romance'?'vulnerability, connection, and what we ask of love':b.genre==='sci-fi'?'what remains essentially human when everything else changes':b.genre==='fantasy'?'power, its costs, and who gets to pay them':'identity and the stories we tell ourselves about who we are'}. ${b.author}'s prose is precise without being cold — every sentence does multiple jobs. The emotional payoff in the final third earns every page that preceded it. Best read slowly, with attention. This is not a book to rush.`
@@ -1737,11 +1763,59 @@ function buildPages(b,preview){
   return groupPgs(paras,4);
 }
 function groupPgs(items,n){const p=[];for(let i=0;i<items.length;i+=n)p.push(items.slice(i,i+n).join(''));return p;}
+let bmClassicTextCache={};
+function paginateClassicText(text,title,author){
+  const cleaned=String(text||'').replace(/\r\n/g,'\n').trim();
+  const paras=cleaned.split(/\n\s*\n/).map(p=>p.trim()).filter(Boolean);
+  const htmlParas=paras.map(p=>'<p>'+escBM(p).replace(/\n/g,'<br>')+'</p>');
+  htmlParas.unshift(`<div class="ch-head">${escBM(title)}</div><div style="text-align:center;color:var(--muted);font-size:12px;margin-bottom:18px;">by ${escBM(author)} &middot; Public domain, via Project Gutenberg</div>`);
+  htmlParas.push(`<p style="text-align:center;color:var(--amber);font-family:var(--fs);font-size:16px;padding:36px 0;">&#8212; The End &#8212;<br><span style="font-size:11px;color:var(--muted);">Full public-domain text courtesy of Project Gutenberg (gutenberg.org)</span></p>`);
+  return groupPgs(htmlParas,6);
+}
+function readClassicBM(b){
+  closeModal('bookModal');
+  document.getElementById('reader-ttl').textContent=b.title;
+  if(bmClassicTextCache[b.gutenbergId]){
+    rPages=paginateClassicText(bmClassicTextCache[b.gutenbergId],b.title,b.author);rIdx=0;
+    showPage();document.getElementById('readerModal').classList.add('open');
+    return;
+  }
+  rPages=[`<div class="ch-head">Loading…</div><p style="text-align:center;color:var(--muted);">Fetching the full public-domain text of "${escBM(b.title)}" from Project Gutenberg…</p>`];
+  rIdx=0;showPage();document.getElementById('readerModal').classList.add('open');
+  if(!bmSocketReady)return showToast('Socket not connected — cannot fetch book');
+  bmSocket.emit('gutenberg:read',{id:b.gutenbergId,title:b.title,author:b.author});
+}
 function readBook(id,preview=false){
-  const b=BOOKS.find(x=>x.id===id);closeModal('bookModal');
+  const b=BOOKS.find(x=>x.id===id);
+  if(b.gutenbergId)return readClassicBM(b);
+  closeModal('bookModal');
   rPages=buildPages(b,preview);rIdx=0;
   document.getElementById('reader-ttl').textContent=b.title;
   showPage();document.getElementById('readerModal').classList.add('open');
+}
+function searchGutenbergBM(){
+  const q=(document.getElementById('gutenbergSearchInputBM').value||'').trim();
+  if(!q)return showToast('Type a title or author to search');
+  if(!bmSocketReady)return showToast('Socket not connected');
+  document.getElementById('gutenbergResultsBM').innerHTML='<div style="color:var(--muted);font-size:12px;padding:12px;grid-column:1/-1;">Searching Project Gutenberg…</div>';
+  bmSocket.emit('gutenberg:search',{query:q});
+}
+function renderGutenbergResultsBM(){
+  const box=document.getElementById('gutenbergResultsBM'); if(!box)return;
+  if(!bmGutenbergResults.length){box.innerHTML='<div style="color:var(--muted);font-size:12px;padding:12px;grid-column:1/-1;">Search for an author or title above — e.g. "Jane Austen", "Sherlock Holmes", "Jules Verne".</div>';return;}
+  box.innerHTML=bmGutenbergResults.map(r=>`<div class="gutenberg-card"><div class="gutenberg-cover" style="${r.cover?`background-image:url('${r.cover}')`:''}">${r.cover?'':'📖'}</div><div class="gutenberg-info"><div class="gutenberg-title">${escBM(r.title)}</div><div class="gutenberg-author">by ${escBM(r.authors)}</div><button class="gutenberg-read-btn" onclick="readGutenbergSearchResultBM(${r.id},'${escBM(r.title).replace(/'/g,"\\'")}','${escBM(r.authors).replace(/'/g,"\\'")}')">Read Free</button></div></div>`).join('');
+}
+function readGutenbergSearchResultBM(id,title,author){
+  document.getElementById('readerModal').classList.add('open');
+  document.getElementById('reader-ttl').textContent=title;
+  if(bmClassicTextCache[id]){
+    rPages=paginateClassicText(bmClassicTextCache[id],title,author);rIdx=0;showPage();
+    return;
+  }
+  rPages=[`<div class="ch-head">Loading…</div><p style="text-align:center;color:var(--muted);">Fetching the full public-domain text of "${escBM(title)}" from Project Gutenberg…</p>`];
+  rIdx=0;showPage();
+  if(!bmSocketReady)return showToast('Socket not connected — cannot fetch book');
+  bmSocket.emit('gutenberg:read',{id,title,author});
 }
 function showPage(){
   const pg=document.getElementById('page-display');
@@ -2418,6 +2492,17 @@ function bmConnectSocket(){
       if(el){el.classList.add('muted'); el.textContent=mins?'🔇 You have been muted by an admin for '+mins+' more minute(s).':'🔇 You have been muted by an admin.'; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),6000);}
     });
     bmSocket.on('admin:kicked',()=>{showToast('You were disconnected by the owner'); setTimeout(()=>window.location.reload(),1500);});
+    bmSocket.on('gutenberg:loading',()=>{});
+    bmSocket.on('gutenberg:text',data=>{
+      bmClassicTextCache[data.id]=data.text;
+      if(document.getElementById('readerModal').classList.contains('open') && document.getElementById('reader-ttl').textContent===data.title){
+        rPages=paginateClassicText(data.text,data.title,data.author);rIdx=0;showPage();
+        showToast('Loaded "'+data.title+'" — '+rPages.length+' pages');
+      }
+      renderGutenbergResultsBM();
+    });
+    bmSocket.on('gutenberg:results',results=>{bmGutenbergResults=results||[]; renderGutenbergResultsBM();});
+    bmSocket.on('gutenberg:error',msg=>showToast(msg));
     bmSocket.on('admin:verify-update',data=>{
       if(!CU)return;
       const verified=!!data?.verified;
@@ -2696,6 +2781,7 @@ changeProfilePic=function(inp){
 let bmAllProfiles={}, bmCommunity={}, bmNotifications=[], bmActiveChatUser=null, bmReportTarget=null;
 let bmActiveGroupId=null, bmBanModalTarget=null, bmBanInfo=null, bmBanCountdownTimer=null;
 let bmTypingHideTimeoutBM=null, bmTypingThrottleBM=null;
+let bmGutenbergResults=[];
 function bmMe(){return bmCurrentUserPayload().username;}
 function bmProfileOf(username){return bmAllProfiles[username] || (bmConnectedUsers||[]).find(u=>u.username===username) || {username,displayName:username,initials:String(username||'??').slice(0,2).toUpperCase(),avatarUrl:''};}
 function bmIsOnline(username){return (bmConnectedUsers||[]).some(u=>u.username===username);}
