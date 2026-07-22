@@ -716,6 +716,10 @@ input,textarea,select{font-family:var(--fn);}
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
     Write a Story
   </button>
+  <button class="pdrop-item" onclick="openVoiceSettingsBM();closeProfile()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+    Narrator Voice
+  </button>
   <button class="pdrop-logout" onclick="doLogout()">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
     Sign Out
@@ -1079,7 +1083,25 @@ input,textarea,select{font-family:var(--fn);}
     <div class="prog-bar" onclick="seekAudio(event)"><div class="prog-fill" id="prog-fill"></div></div>
     <div class="prog-times"><span id="cur-t">0:00</span><span id="tot-t">0:00</span></div>
   </div>
+  <button class="ctl" onclick="openVoiceSettingsBM()" title="Narrator Voice"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg></button>
   <button class="mclose" onclick="closeAudio()" style="margin-left:8px;">&#10005;</button>
+</div>
+
+<!-- VOICE SETTINGS MODAL -->
+<div class="moverlay" id="voiceSettingsModalBM">
+  <div class="modal" style="max-width:380px;">
+    <div class="mclose-row"><button class="mclose" onclick="closeModal('voiceSettingsModalBM')">&#10005;</button></div>
+    <div class="mbody">
+      <h3 style="margin:0 0 16px;font-size:16px;">Narrator Voice</h3>
+      <p style="color:var(--muted);font-size:12px;margin:0 0 16px;">Choose the voice used when listening to books. Uses your device's built-in voices.</p>
+      <div style="display:flex;gap:10px;margin-bottom:16px;">
+        <button id="voiceOptFemale" class="btn-primary" style="flex:1;padding:10px;" onclick="setNarratorGenderBM('female')">&#9792; Female</button>
+        <button id="voiceOptMale" class="btn-primary" style="flex:1;padding:10px;background:transparent;color:var(--txt);border:1px solid var(--border);" onclick="setNarratorGenderBM('male')">&#9794; Male</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">Available voice: <span id="voiceCurrentName">—</span></div>
+      <button class="btn-primary" style="width:100%;background:transparent;color:var(--txt);border:1px solid var(--border);font-size:12px;padding:8px;" onclick="previewVoiceBM()">&#9654; Preview voice</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1734,6 +1756,56 @@ function saveCurrentToLibraryBM(){
 
 // AUDIO
 let audUtter=null,audWords=[],audWordIdx=0,audTextFull='';
+let bmVoices=[];
+let bmNarratorGender=localStorage.getItem('bm_narrator_gender')||'female';
+
+const FEMALE_VOICE_HINTS=['female','woman','samantha','victoria','karen','moira','tessa','fiona','zira','susan','allison','ava','serena','kate','emma','joanna','salli','kimberly','nicole','amy','olivia','google uk english female','google us english','microsoft zira','microsoft hazel','microsoft susan'];
+const MALE_VOICE_HINTS=['male','man','daniel','alex','fred','oliver','arthur','david','george','james','matthew','ryan','justin','eric','tom','google uk english male','microsoft david','microsoft mark','microsoft george','microsoft ryan'];
+
+function loadBmVoices(){bmVoices=window.speechSynthesis?window.speechSynthesis.getVoices():[];}
+if('speechSynthesis' in window){
+  loadBmVoices();
+  window.speechSynthesis.onvoiceschanged=loadBmVoices;
+}
+function pickVoiceForGender(gender){
+  if(!bmVoices.length)loadBmVoices();
+  const english=bmVoices.filter(v=>/^en/i.test(v.lang));
+  const pool=english.length?english:bmVoices;
+  const hints=gender==='male'?MALE_VOICE_HINTS:FEMALE_VOICE_HINTS;
+  let match=pool.find(v=>hints.some(h=>v.name.toLowerCase().includes(h)));
+  if(!match&&gender==='female')match=pool.find(v=>!MALE_VOICE_HINTS.some(h=>v.name.toLowerCase().includes(h)));
+  if(!match)match=pool[0]||bmVoices[0];
+  return match||null;
+}
+function openVoiceSettingsBM(){
+  loadBmVoices();
+  updateVoiceSettingsUI();
+  document.getElementById('voiceSettingsModalBM').classList.add('open');
+}
+function updateVoiceSettingsUI(){
+  const femBtn=document.getElementById('voiceOptFemale'),maleBtn=document.getElementById('voiceOptMale');
+  const active='background:var(--amber,#e0a339);color:#111;border:none;';
+  const inactive='background:transparent;color:var(--txt);border:1px solid var(--border);';
+  femBtn.style.cssText+=bmNarratorGender==='female'?active:inactive;
+  maleBtn.style.cssText+=bmNarratorGender==='male'?active:inactive;
+  const v=pickVoiceForGender(bmNarratorGender);
+  document.getElementById('voiceCurrentName').textContent=v?v.name:'System default';
+}
+function setNarratorGenderBM(gender){
+  bmNarratorGender=gender;
+  localStorage.setItem('bm_narrator_gender',gender);
+  updateVoiceSettingsUI();
+  if(isPlay){window.speechSynthesis.cancel();speakFromWord(audWordIdx);}
+}
+function previewVoiceBM(){
+  if(!('speechSynthesis' in window))return showToast('Speech not supported in this browser');
+  window.speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance('Hello, this is how I will sound while narrating your books.');
+  const v=pickVoiceForGender(bmNarratorGender);
+  if(v)u.voice=v;
+  u.rate=1;u.pitch=1;
+  window.speechSynthesis.speak(u);
+}
 function listenBook(idOrBook){
   let b;
   if(idOrBook&&typeof idOrBook==='object')b=idOrBook;
@@ -1757,7 +1829,9 @@ function speakFromWord(i){
   const chunk=audWords.slice(i,i+400).join(' ');
   if(!chunk){isPlay=false;setPlayIco(false);return;}
   audUtter=new SpeechSynthesisUtterance(chunk);
-  audUtter.rate=1;
+  const v=pickVoiceForGender(bmNarratorGender);
+  if(v)audUtter.voice=v;
+  audUtter.rate=1;audUtter.pitch=1;
   audUtter.onboundary=e=>{
     if(e.name==='word'){
       const spoken=chunk.slice(0,e.charIndex).split(/\s+/).filter(Boolean).length;
