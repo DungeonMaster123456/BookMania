@@ -805,8 +805,8 @@ input,textarea,select{font-family:var(--fn);}
   <div style="text-align:center;margin-top:24px;"><button class="btn-outline" id="load-more-btn" onclick="loadMore()">Load More</button></div>
 
   <div class="gutenberg-panel">
-    <h3>📖 Project Gutenberg — 70,000+ Free Public Domain Books</h3>
-    <p class="gutenberg-sub">Search the full Project Gutenberg library and read any out-of-copyright classic in full, for free. Text is fetched live from gutenberg.org through the BookMania server.</p>
+    <h3>📖 Search Stories — 70,000+ Free Classic Books</h3>
+    <p class="gutenberg-sub">Search a huge library of free classic books and read any of them in full, for free.</p>
     <div style="display:flex;gap:8px;margin:12px 0;">
       <input class="finput" id="gutenbergSearchInputBM" placeholder="Search by title or author (e.g. Jules Verne, Little Women)..." onkeydown="if(event.key==='Enter')searchGutenbergBM()">
       <button class="btn-primary" onclick="searchGutenbergBM()" style="white-space:nowrap;">Search</button>
@@ -1048,6 +1048,8 @@ input,textarea,select{font-family:var(--fn);}
       <button class="tb-btn" onclick="changeFontSize(-1)" style="font-size:11px;font-weight:700;">A-</button>
       <button class="tb-btn" onclick="changeFontSize(1)" style="font-size:13px;font-weight:700;">A+</button>
       <button class="tb-btn" onclick="toggleBookmark()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button>
+      <button class="tb-btn" id="reader-save-btn" onclick="saveCurrentToLibraryBM()" title="Save to Library">&#128190;</button>
+      <button class="tb-btn" onclick="listenBook(null)" title="Listen">&#9834;</button>
     </div>
   </div>
   <div class="page-container" id="page-container">
@@ -1258,7 +1260,7 @@ const BASE_STORIES=[
 ];
 
 let CU=null,CBook=null,rPages=[],rIdx=0,rFS=18,audIv=null,audSec=0,audDur=0,isPlay=false;
-let bOffset=0,bFilter='all',pubStories=[],uLib=[],uRent=[];
+let bOffset=0,bFilter='all',pubStories=[],uLib=[],uRent=[],uExtra=[];
 const PG_SZ=30;
 
 // AUTH
@@ -1278,6 +1280,14 @@ function handleAvatar(inp){
 function hashP(p){let h=0;for(let i=0;i<p.length;i++)h=(Math.imul(31,h)+p.charCodeAt(i))|0;return h.toString(36);}
 function getU(){try{return JSON.parse(localStorage.getItem('bm_u')||'{}')}catch{return{}}}
 function saveU(u){localStorage.setItem('bm_u',JSON.stringify(u));}
+function persistUserLib(){
+  if(!CU)return;
+  const us=getU();
+  if(!us[CU.un])return;
+  us[CU.un].lib=uLib;us[CU.un].rent=uRent;us[CU.un].extra=uExtra;
+  CU=us[CU.un];
+  saveU(us);
+}
 function doSignup(){
   const fn=document.getElementById('su-fname').value.trim();
   const ln=document.getElementById('su-lname').value.trim();
@@ -1289,7 +1299,7 @@ function doSignup(){
   if(pw.length<8){er.textContent='Password must be at least 8 characters.';er.style.display='block';return;}
   const us=getU();
   if(us[un]){er.textContent='Username already taken.';er.style.display='block';return;}
-  us[un]={fn,ln,em,un,pw:hashP(pw),av:pendAv||null,lib:[],rent:[]};
+  us[un]={fn,ln,em,un,pw:hashP(pw),av:pendAv||null,lib:[],rent:[],extra:[]};
   saveU(us);loginUser(us[un]);
 }
 function doLogin(){
@@ -1302,7 +1312,7 @@ function doLogin(){
   loginUser(m);
 }
 function loginUser(u){
-  CU=u;uLib=u.lib||[];uRent=u.rent||[];
+  CU=u;uLib=u.lib||[];uRent=u.rent||[];uExtra=u.extra||[];
   localStorage.setItem('bm_sess',u.un);
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app').style.display='block';
@@ -1389,18 +1399,18 @@ function initApp(){renderHomeScrolls();renderBrowse();renderStories();renderLibr
 
 // COVERS — use Open Library cover images where available
 const BOOK_COVERS={
-  1:'9780439708180',   // HP Philosopher's Stone
-  2:'9780061935466',   // To Kill a Mockingbird
-  3:'9780451524935',   // 1984
-  4:'9780141439518',   // Pride and Prejudice
-  5:'9780743273565',   // Great Gatsby
-  6:'9780441013593',   // Dune
-  7:'9780345391803',   // Hitchhiker's Guide
-  8:'9780618640157',   // LOTR
-  9:'9780140449136',   // Crime and Punishment
-  10:'9780316769174',  // Catcher in the Rye
-  11:'9780060850524',  // Brave New World
-  12:'9780062315007',  // The Alchemist
+  1:'9780141439518',   // Pride and Prejudice
+  2:'9780743273565',   // The Great Gatsby
+  3:'9780140449136',   // Crime and Punishment
+  4:'9780486282619',   // Sherlock Holmes: A Study in Scarlet
+  5:'9780140449266',   // The Count of Monte Cristo
+  6:'9780142437247',   // Moby Dick
+  7:'9780143035008',   // Anna Karenina
+  8:'9780141439570',   // The Picture of Dorian Gray
+  9:'9780141439556',   // Wuthering Heights
+  10:'9780141441146',  // Jane Eyre
+  11:'9780141439846',  // Dracula
+  12:'9780486282114',  // Frankenstein
   13:'9780307588371',  // Gone Girl
   14:'9780385504201',  // Da Vinci Code
   15:'9780486282619',  // Sherlock
@@ -1571,10 +1581,10 @@ function openBook(id){
   document.getElementById('m-title').textContent=b.title;
   document.getElementById('m-author').textContent='by '+b.author;
   document.getElementById('m-price').textContent='Public domain — full book free to read';
-  document.getElementById('m-tags').innerHTML=`<div class="tag">${b.genre}</div><div class="tag" style="color:var(--green);border-color:rgba(61,220,132,.35);">📖 Project Gutenberg</div>`;
+  document.getElementById('m-tags').innerHTML=`<div class="tag">${b.genre}</div><div class="tag" style="color:var(--green);border-color:rgba(61,220,132,.35);">📖 Free Classic</div>`;
   const ac=document.getElementById('m-actions');
   ac.innerHTML=`<button class="btn-buy" onclick="readBook(${id})">Read Full Book Free</button><button class="btn-listen" onclick="listenBook(${id})">Listen</button>`;
-  document.getElementById('m-desc').textContent=b.desc+' This edition is in the public domain and is fetched in full, free to read, from Project Gutenberg.';
+  document.getElementById('m-desc').textContent=b.desc+' This edition is in the public domain and is free to read in full.';
   const aiEl=document.getElementById('ai-txt');
   aiEl.textContent='Ask a question below to discuss "'+b.title+'" — I can talk through themes, characters, and context once you start reading.';
   document.getElementById('bookModal').classList.add('open');
@@ -1604,19 +1614,21 @@ function paginateClassicText(text,title,author){
   const cleaned=String(text||'').replace(/\r\n/g,'\n').trim();
   const paras=cleaned.split(/\n\s*\n/).map(p=>p.trim()).filter(Boolean);
   const htmlParas=paras.map(p=>'<p>'+escBM(p).replace(/\n/g,'<br>')+'</p>');
-  htmlParas.unshift(`<div class="ch-head">${escBM(title)}</div><div style="text-align:center;color:var(--muted);font-size:12px;margin-bottom:18px;">by ${escBM(author)} &middot; Public domain, via Project Gutenberg</div>`);
-  htmlParas.push(`<p style="text-align:center;color:var(--amber);font-family:var(--fs);font-size:16px;padding:36px 0;">&#8212; The End &#8212;<br><span style="font-size:11px;color:var(--muted);">Full public-domain text courtesy of Project Gutenberg (gutenberg.org)</span></p>`);
+  htmlParas.unshift(`<div class="ch-head">${escBM(title)}</div><div style="text-align:center;color:var(--muted);font-size:12px;margin-bottom:18px;">by ${escBM(author)} &middot; Public domain classic</div>`);
+  htmlParas.push(`<p style="text-align:center;color:var(--amber);font-family:var(--fs);font-size:16px;padding:36px 0;">&#8212; The End &#8212;<br><span style="font-size:11px;color:var(--muted);">Full public-domain text</span></p>`);
   return groupPgs(htmlParas,6);
 }
+let currentReaderBook=null;
 function readClassicBM(b){
   closeModal('bookModal');
+  currentReaderBook=b;
   document.getElementById('reader-ttl').textContent=b.title;
   if(bmClassicTextCache[b.gutenbergId]){
     rPages=paginateClassicText(bmClassicTextCache[b.gutenbergId],b.title,b.author);rIdx=0;
     showPage();document.getElementById('readerModal').classList.add('open');
     return;
   }
-  rPages=[`<div class="ch-head">Loading…</div><p style="text-align:center;color:var(--muted);">Fetching the full public-domain text of "${escBM(b.title)}" from Project Gutenberg…</p>`];
+  rPages=[`<div class="ch-head">Loading…</div><p style="text-align:center;color:var(--muted);">Fetching the full public-domain text of "${escBM(b.title)}"…</p>`];
   rIdx=0;showPage();document.getElementById('readerModal').classList.add('open');
   if(!bmSocketReady)return showToast('Socket not connected — cannot fetch book');
   bmSocket.emit('gutenberg:read',{id:b.gutenbergId,title:b.title,author:b.author});
@@ -1629,7 +1641,7 @@ function searchGutenbergBM(){
   const q=(document.getElementById('gutenbergSearchInputBM').value||'').trim();
   if(!q)return showToast('Type a title or author to search');
   if(!bmSocketReady)return showToast('Socket not connected');
-  document.getElementById('gutenbergResultsBM').innerHTML='<div style="color:var(--muted);font-size:12px;padding:12px;grid-column:1/-1;">Searching Project Gutenberg…</div>';
+  document.getElementById('gutenbergResultsBM').innerHTML='<div style="color:var(--muted);font-size:12px;padding:12px;grid-column:1/-1;">Searching stories…</div>';
   bmSocket.emit('gutenberg:search',{query:q});
 }
 function renderGutenbergResultsBM(){
@@ -1638,13 +1650,14 @@ function renderGutenbergResultsBM(){
   box.innerHTML=bmGutenbergResults.map(r=>`<div class="gutenberg-card"><div class="gutenberg-cover" style="${r.cover?`background-image:url('${r.cover}')`:''}">${r.cover?'':'📖'}</div><div class="gutenberg-info"><div class="gutenberg-title">${escBM(r.title)}</div><div class="gutenberg-author">by ${escBM(r.authors)}</div><button class="gutenberg-read-btn" onclick="readGutenbergSearchResultBM(${r.id},'${escBM(r.title).replace(/'/g,"\\'")}','${escBM(r.authors).replace(/'/g,"\\'")}')">Read Free</button></div></div>`).join('');
 }
 function readGutenbergSearchResultBM(id,title,author){
+  currentReaderBook={id:'gu-'+id,gutenbergId:id,title,author,genre:'classic',desc:'',isFree:true,color:'c1',icon:'📖',isSearchResult:true};
   document.getElementById('readerModal').classList.add('open');
   document.getElementById('reader-ttl').textContent=title;
   if(bmClassicTextCache[id]){
     rPages=paginateClassicText(bmClassicTextCache[id],title,author);rIdx=0;showPage();
     return;
   }
-  rPages=[`<div class="ch-head">Loading…</div><p style="text-align:center;color:var(--muted);">Fetching the full public-domain text of "${escBM(title)}" from Project Gutenberg…</p>`];
+  rPages=[`<div class="ch-head">Loading…</div><p style="text-align:center;color:var(--muted);">Fetching the full public-domain text of "${escBM(title)}"…</p>`];
   rIdx=0;showPage();
   if(!bmSocketReady)return showToast('Socket not connected — cannot fetch book');
   bmSocket.emit('gutenberg:read',{id,title,author});
@@ -1703,11 +1716,31 @@ document.addEventListener('keydown',e=>{
 });
 function changeFontSize(d){rFS=Math.max(13,Math.min(26,rFS+d));document.getElementById('page-display').style.fontSize=rFS+'px';}
 function toggleBookmark(){showToast('Page '+(rIdx+1)+' bookmarked');}
+function saveCurrentToLibraryBM(){
+  const b=currentReaderBook;
+  if(!b)return showToast('Nothing open to save');
+  if(!CU)return showToast('Log in to save books to your library');
+  if(b.isSearchResult){
+    if(uExtra.some(x=>x.gutenbergId===b.gutenbergId))return showToast('Already in your library');
+    uExtra.push({id:b.id,gutenbergId:b.gutenbergId,title:b.title,author:b.author,genre:b.genre,isFree:true,color:b.color,icon:b.icon});
+  }else{
+    if(uLib.includes(b.id))return showToast('Already in your library');
+    uLib.push(b.id);
+  }
+  persistUserLib();
+  renderLibrary();
+  showToast('Saved to your library');
+}
 
 // AUDIO
-function listenBook(id){
-  const b=BOOKS.find(x=>x.id===id);closeModal('bookModal');
-  document.getElementById('aud-cov').innerHTML=`<div style="width:42px;height:42px;" class="${b.color} bcover-inner"><div style="font-size:18px;opacity:.7;">&#9834;</div></div>`;
+function listenBook(idOrBook){
+  let b;
+  if(idOrBook&&typeof idOrBook==='object')b=idOrBook;
+  else if(idOrBook!=null)b=BOOKS.find(x=>x.id===idOrBook);
+  else b=currentReaderBook;
+  if(!b)return showToast('Open a book first to listen');
+  closeModal('bookModal');
+  document.getElementById('aud-cov').innerHTML=`<div style="width:42px;height:42px;" class="${b.color||''} bcover-inner"><div style="font-size:18px;opacity:.7;">&#9834;</div></div>`;
   document.getElementById('aud-t').textContent=b.title;
   document.getElementById('aud-a').textContent=b.author;
   audDur=Math.floor(Math.random()*5400)+1800;audSec=0;updAudio();
@@ -1886,10 +1919,24 @@ function insertAIText(){
 }
 
 // LIBRARY
+function readSavedBM(kind,idOrGid){
+  if(kind==='book'){readBook(idOrGid);return;}
+  const item=uExtra.find(x=>x.gutenbergId===idOrGid);
+  if(!item)return;
+  readGutenbergSearchResultBM(item.gutenbergId,item.title,item.author);
+}
+function listenSavedBM(kind,idOrGid,ev){
+  if(ev)ev.stopPropagation();
+  if(kind==='book'){listenBook(idOrGid);return;}
+  const item=uExtra.find(x=>x.gutenbergId===idOrGid);
+  if(!item)return;
+  listenBook({title:item.title,author:item.author,color:item.color});
+}
 function renderLibrary(){
   const owned=BOOKS.filter(b=>uLib.includes(b.id));
   const rented=BOOKS.filter(b=>uRent.includes(b.id));
-  document.getElementById('lib-owned').innerHTML=owned.length?owned.map(b=>`<div class="owned-row" onclick="readBook(${b.id})"><div class="owned-cov">${mkCov(b,58,82)}</div><div class="owned-info"><div class="owned-t">${b.title}</div><div class="owned-a">by ${b.author}</div><div class="prog-rd"><div class="prog-rd-fill" style="width:${Math.floor(Math.random()*80+10)}%"></div></div><div class="prog-pct">Reading in progress</div></div></div>`).join(''):`<div style="text-align:center;padding:48px;color:var(--muted);"><div style="font-size:38px;opacity:.3;margin-bottom:12px;">&#9776;</div><p>No books purchased yet.</p><br><button class="btn-primary" onclick="switchTab('browse')">Browse Books</button></div>`;
+  const extraRows=uExtra.map(b=>`<div class="owned-row" onclick="readSavedBM('extra',${b.gutenbergId})"><div class="owned-cov"><div style="width:58px;height:82px;" class="${b.color||''} bcover-inner"><div style="font-size:18px;opacity:.55;">${b.icon||'📖'}</div><div class="bcover-t">${b.title}</div><div class="bcover-a">${b.author}</div></div></div><div class="owned-info"><div class="owned-t">${b.title}</div><div class="owned-a">by ${b.author}</div><button class="btn-listen" style="margin-top:6px;padding:5px 12px;font-size:11px;" onclick="listenSavedBM('extra',${b.gutenbergId},event)">Listen</button></div></div>`).join('');
+  document.getElementById('lib-owned').innerHTML=(owned.length||uExtra.length)?owned.map(b=>`<div class="owned-row" onclick="readSavedBM('book',${b.id})"><div class="owned-cov">${mkCov(b,58,82)}</div><div class="owned-info"><div class="owned-t">${b.title}</div><div class="owned-a">by ${b.author}</div><div class="prog-rd"><div class="prog-rd-fill" style="width:${Math.floor(Math.random()*80+10)}%"></div></div><div class="prog-pct">Reading in progress</div></div></div>`).join('')+extraRows:`<div style="text-align:center;padding:48px;color:var(--muted);"><div style="font-size:38px;opacity:.3;margin-bottom:12px;">&#9776;</div><p>No books purchased yet.</p><br><button class="btn-primary" onclick="switchTab('browse')">Browse Books</button></div>`;
   document.getElementById('lib-rented').innerHTML=rented.length?rented.map(b=>`<div class="owned-row" onclick="readBook(${b.id})"><div class="owned-cov">${mkCov(b,58,82)}</div><div class="owned-info"><div class="owned-t">${b.title}</div><div class="owned-a">by ${b.author}</div><div style="font-size:11px;color:var(--amber);margin-bottom:8px;">Rental expires in 5 days</div><div class="prog-rd"><div class="prog-rd-fill" style="width:35%"></div></div><div class="prog-pct">35% read</div></div></div>`).join(''):`<div style="text-align:center;padding:48px;color:var(--muted);">No rented books currently.</div>`;
   document.getElementById('lib-wishlist').innerHTML=`<div style="text-align:center;padding:48px;color:var(--muted);"><div style="font-size:38px;opacity:.3;margin-bottom:12px;">&#9733;</div><p>Wishlist coming soon. Save books to read later.</p></div>`;
 }
