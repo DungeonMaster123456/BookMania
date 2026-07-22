@@ -1733,34 +1733,81 @@ function saveCurrentToLibraryBM(){
 }
 
 // AUDIO
+let audUtter=null,audWords=[],audWordIdx=0,audTextFull='';
 function listenBook(idOrBook){
   let b;
   if(idOrBook&&typeof idOrBook==='object')b=idOrBook;
   else if(idOrBook!=null)b=BOOKS.find(x=>x.id===idOrBook);
   else b=currentReaderBook;
   if(!b)return showToast('Open a book first to listen');
+  if(!('speechSynthesis' in window))return showToast('Your browser does not support text-to-speech');
   closeModal('bookModal');
   document.getElementById('aud-cov').innerHTML=`<div style="width:42px;height:42px;" class="${b.color||''} bcover-inner"><div style="font-size:18px;opacity:.7;">&#9834;</div></div>`;
   document.getElementById('aud-t').textContent=b.title;
   document.getElementById('aud-a').textContent=b.author;
-  audDur=Math.floor(Math.random()*5400)+1800;audSec=0;updAudio();
-  document.getElementById('audioBar').classList.add('open');startAudio();
+  const gid=b.gutenbergId||(typeof b.id==='string'&&b.id.startsWith('gu-')?Number(b.id.slice(3)):null);
+  audTextFull=(gid&&bmClassicTextCache[gid])?bmClassicTextCache[gid]:(b.desc||`${b.title} by ${b.author}. Full narration is unavailable for this title — open it in the reader to read along.`);
+  audWords=audTextFull.split(/\s+/).filter(Boolean);
+  audWordIdx=0;audDur=audWords.length;audSec=0;updAudio();
+  document.getElementById('audioBar').classList.add('open');
+  startAudio();
+}
+function speakFromWord(i){
+  window.speechSynthesis.cancel();
+  const chunk=audWords.slice(i,i+400).join(' ');
+  if(!chunk){isPlay=false;setPlayIco(false);return;}
+  audUtter=new SpeechSynthesisUtterance(chunk);
+  audUtter.rate=1;
+  audUtter.onboundary=e=>{
+    if(e.name==='word'){
+      const spoken=chunk.slice(0,e.charIndex).split(/\s+/).filter(Boolean).length;
+      audWordIdx=i+spoken;audSec=audWordIdx;updAudio();
+    }
+  };
+  audUtter.onend=()=>{
+    if(!isPlay)return;
+    const next=i+400;
+    if(next<audWords.length){speakFromWord(next);}
+    else{audSec=audDur;audWordIdx=audWords.length;isPlay=false;setPlayIco(false);updAudio();}
+  };
+  window.speechSynthesis.speak(audUtter);
 }
 function startAudio(){
-  isPlay=true;setPlayIco(true);if(audIv)clearInterval(audIv);
-  audIv=setInterval(()=>{if(isPlay){audSec++;if(audSec>=audDur){audSec=audDur;isPlay=false;setPlayIco(false);}updAudio();}},1000);
+  isPlay=true;setPlayIco(true);
+  speakFromWord(audWordIdx);
 }
 function updAudio(){
-  document.getElementById('prog-fill').style.width=((audSec/audDur)*100)+'%';
-  document.getElementById('cur-t').textContent=fT(audSec);
-  document.getElementById('tot-t').textContent=fT(audDur);
+  document.getElementById('prog-fill').style.width=(audDur?(audSec/audDur)*100:0)+'%';
+  document.getElementById('cur-t').textContent=fT(Math.floor((audSec/Math.max(1,audDur))*estimatedSecs()));
+  document.getElementById('tot-t').textContent=fT(estimatedSecs());
 }
+function estimatedSecs(){return Math.max(1,Math.round(audDur/2.5));}
 function fT(s){const m=Math.floor(s/60),sc=s%60;return m+':'+(sc<10?'0':'')+sc;}
-function togglePlay(){isPlay=!isPlay;setPlayIco(isPlay);}
+function togglePlay(){
+  if(isPlay){
+    isPlay=false;setPlayIco(false);window.speechSynthesis.cancel();
+  }else{
+    isPlay=true;setPlayIco(true);speakFromWord(audWordIdx);
+  }
+}
 function setPlayIco(p){document.getElementById('play-icon').innerHTML=p?'<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>':'<polygon points="5 3 19 12 5 21 5 3"/>';}
-function skipAudio(s){audSec=Math.max(0,Math.min(audDur,audSec+s));updAudio();}
-function seekAudio(e){const b=e.currentTarget;audSec=Math.floor(Math.max(0,Math.min(1,e.offsetX/b.offsetWidth))*audDur);updAudio();}
-function closeAudio(){document.getElementById('audioBar').classList.remove('open');if(audIv)clearInterval(audIv);isPlay=false;}
+function skipAudio(s){
+  const wordsPerSec=audDur/Math.max(1,estimatedSecs());
+  audWordIdx=Math.max(0,Math.min(audWords.length,audWordIdx+Math.round(s*wordsPerSec)));
+  audSec=audWordIdx;updAudio();
+  if(isPlay)speakFromWord(audWordIdx);
+}
+function seekAudio(e){
+  const b=e.currentTarget;
+  audWordIdx=Math.floor(Math.max(0,Math.min(1,e.offsetX/b.offsetWidth))*audWords.length);
+  audSec=audWordIdx;updAudio();
+  if(isPlay)speakFromWord(audWordIdx);
+}
+function closeAudio(){
+  document.getElementById('audioBar').classList.remove('open');
+  window.speechSynthesis.cancel();
+  isPlay=false;
+}
 
 // STORIES
 function renderStories(){
